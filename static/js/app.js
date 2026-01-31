@@ -8,6 +8,13 @@ let papers = [];
 let currentPaper = null;
 let searchTimeout = null;
 let suggestionIndex = -1;
+let allTags = [];
+let allAuthors = [];
+
+// Edit modal tag/author state
+let editAuthors = [];
+let editTags = [];
+let editKeywords = [];
 
 // ============== Initialization ==============
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,8 +28,14 @@ async function initializeApp() {
     // Load all papers
     await loadPapers();
 
+    // Load tags and authors for suggestions
+    await loadTagsAndAuthors();
+
     // Setup event listeners
     setupEventListeners();
+
+    // Setup tag chip inputs
+    setupTagInputs();
 }
 
 function setupEventListeners() {
@@ -91,6 +104,21 @@ async function loadPapers() {
         }
     } catch (error) {
         console.error('Failed to load papers:', error);
+    }
+}
+
+async function loadTagsAndAuthors() {
+    try {
+        const [tagsRes, authorsRes] = await Promise.all([
+            fetch('/api/tags'),
+            fetch('/api/authors')
+        ]);
+        const tagsData = await tagsRes.json();
+        const authorsData = await authorsRes.json();
+        allTags = tagsData.tags || [];
+        allAuthors = authorsData.authors || [];
+    } catch (error) {
+        console.error('Failed to load tags/authors:', error);
     }
 }
 
@@ -319,10 +347,24 @@ function showPreview(paper) {
         ${paper.year ? `<p><strong>年份：</strong>${paper.year}</p>` : ''}
         ${paper.tags ? `<p><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
         ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
+            📄 加载预览
+        </button>
     `;
 
-    // Load PDF
-    pdf.innerHTML = `<iframe src="/api/pdf/${paper.id}#toolbar=0" title="PDF Preview"></iframe>`;
+    // Show loading placeholder instead of auto-loading PDF (lazy load)
+    pdf.innerHTML = `
+        <div class="preview-placeholder" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div class="preview-placeholder-icon">📄</div>
+            <p>点击上方"加载预览"查看PDF</p>
+            <p style="font-size:0.8rem;color:var(--text-muted);">或双击论文直接打开</p>
+        </div>
+    `;
+}
+
+function loadPdfPreview(paperId) {
+    const pdf = document.getElementById('previewPdf');
+    pdf.innerHTML = `<iframe src="/api/pdf/${paperId}#toolbar=0" title="PDF Preview" loading="lazy"></iframe>`;
 }
 
 function hidePreview() {
@@ -360,17 +402,136 @@ function openCurrentPaper() {
     }
 }
 
+// ============== Tag Chip Input Setup ==============
+function setupTagInputs() {
+    setupChipInput('editAuthorsInput', 'authorChips', 'editAuthors', () => editAuthors, v => editAuthors = v);
+    setupChipInput('editTagsInput', 'tagChips', 'editTags', () => editTags, v => editTags = v, true);
+    setupChipInput('editKeywordsInput', 'keywordChips', 'editKeywords', () => editKeywords, v => editKeywords = v);
+}
+
+function setupChipInput(inputId, chipsId, hiddenId, getArray, setArray, showSuggestions = false) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const value = input.value.trim().replace(/,/g, '');
+            if (value && !getArray().includes(value)) {
+                setArray([...getArray(), value]);
+                renderChips(chipsId, getArray(), setArray, hiddenId);
+            }
+            input.value = '';
+        } else if (e.key === 'Backspace' && !input.value) {
+            const arr = getArray();
+            if (arr.length > 0) {
+                setArray(arr.slice(0, -1));
+                renderChips(chipsId, getArray(), setArray, hiddenId);
+            }
+        }
+    });
+
+    // Show tag suggestions
+    if (showSuggestions) {
+        input.addEventListener('input', () => {
+            renderTagSuggestions(input.value.trim(), getArray, setArray, chipsId, hiddenId);
+        });
+        input.addEventListener('focus', () => {
+            renderTagSuggestions(input.value.trim(), getArray, setArray, chipsId, hiddenId);
+        });
+    }
+
+    // Click on container focuses input
+    const container = input.closest('.tag-input-container');
+    if (container) {
+        container.addEventListener('click', () => input.focus());
+    }
+}
+
+function renderChips(containerId, items, setArray, hiddenId) {
+    const container = document.getElementById(containerId);
+    const hidden = document.getElementById(hiddenId);
+
+    container.innerHTML = items.map((item, index) => `
+        <span class="tag-chip">
+            ${escapeHtml(item)}
+            <span class="tag-chip-remove" onclick="removeChip(event, ${index}, '${containerId}', '${hiddenId}')">&times;</span>
+        </span>
+    `).join('');
+
+    hidden.value = items.join(', ');
+}
+
+function removeChip(event, index, containerId, hiddenId) {
+    event.stopPropagation();
+
+    if (containerId === 'authorChips') {
+        editAuthors.splice(index, 1);
+        renderChips(containerId, editAuthors, v => editAuthors = v, hiddenId);
+    } else if (containerId === 'tagChips') {
+        editTags.splice(index, 1);
+        renderChips(containerId, editTags, v => editTags = v, hiddenId);
+    } else if (containerId === 'keywordChips') {
+        editKeywords.splice(index, 1);
+        renderChips(containerId, editKeywords, v => editKeywords = v, hiddenId);
+    }
+}
+
+function renderTagSuggestions(query, getArray, setArray, chipsId, hiddenId) {
+    const suggestionsContainer = document.getElementById('tagSuggestions');
+    if (!suggestionsContainer) return;
+
+    const currentTags = getArray();
+    const filtered = allTags.filter(tag =>
+        !currentTags.includes(tag) &&
+        (query === '' || tag.toLowerCase().includes(query.toLowerCase()))
+    ).slice(0, 10);
+
+    if (filtered.length === 0) {
+        suggestionsContainer.innerHTML = '';
+        return;
+    }
+
+    suggestionsContainer.innerHTML = filtered.map(tag => `
+        <span class="tag-suggestion" onclick="addSuggestedTag('${escapeHtml(tag)}', '${chipsId}', '${hiddenId}')">${escapeHtml(tag)}</span>
+    `).join('');
+}
+
+function addSuggestedTag(tag, chipsId, hiddenId) {
+    if (chipsId === 'tagChips' && !editTags.includes(tag)) {
+        editTags.push(tag);
+        renderChips(chipsId, editTags, v => editTags = v, hiddenId);
+        document.getElementById('editTagsInput').value = '';
+        renderTagSuggestions('', () => editTags, v => editTags = v, chipsId, hiddenId);
+    }
+}
+
 // ============== Edit Modal ==============
 function editCurrentPaper() {
     if (!currentPaper) return;
 
     document.getElementById('editPaperId').value = currentPaper.id;
     document.getElementById('editTitle').value = currentPaper.title || '';
-    document.getElementById('editAuthors').value = currentPaper.authors || '';
-    document.getElementById('editTags').value = currentPaper.tags || '';
-    document.getElementById('editKeywords').value = currentPaper.keywords || '';
     document.getElementById('editYear').value = currentPaper.year || '';
     document.getElementById('editAbstract').value = currentPaper.abstract || '';
+
+    // Parse comma-separated values into arrays
+    editAuthors = (currentPaper.authors || '').split(',').map(s => s.trim()).filter(s => s);
+    editTags = (currentPaper.tags || '').split(',').map(s => s.trim()).filter(s => s);
+    editKeywords = (currentPaper.keywords || '').split(',').map(s => s.trim()).filter(s => s);
+
+    // Render chips
+    renderChips('authorChips', editAuthors, v => editAuthors = v, 'editAuthors');
+    renderChips('tagChips', editTags, v => editTags = v, 'editTags');
+    renderChips('keywordChips', editKeywords, v => editKeywords = v, 'editKeywords');
+
+    // Clear inputs
+    document.getElementById('editAuthorsInput').value = '';
+    document.getElementById('editTagsInput').value = '';
+    document.getElementById('editKeywordsInput').value = '';
+
+    // Show tag suggestions
+    renderTagSuggestions('', () => editTags, v => editTags = v, 'tagChips', 'editTags');
 
     document.getElementById('editModal').classList.add('active');
 }
@@ -384,9 +545,9 @@ async function savePaper() {
 
     const data = {
         title: document.getElementById('editTitle').value,
-        authors: document.getElementById('editAuthors').value,
-        tags: document.getElementById('editTags').value,
-        keywords: document.getElementById('editKeywords').value,
+        authors: editAuthors.join(', '),
+        tags: editTags.join(', '),
+        keywords: editKeywords.join(', '),
         year: document.getElementById('editYear').value,
         abstract: document.getElementById('editAbstract').value,
     };
@@ -407,6 +568,7 @@ async function savePaper() {
             // Reload papers
             await loadPapers();
             await loadStats();
+            await loadTagsAndAuthors();
 
             closeEditModal();
             showToast('保存成功', 'success');
@@ -423,9 +585,19 @@ async function savePaper() {
 async function scanPapers() {
     const path = document.getElementById('settingsPapersDir')?.value;
 
-    showToast('正在扫描论文文件夹...', 'info');
+    // Show progress modal
+    const modal = document.getElementById('scanModal');
+    const progressBar = document.getElementById('scanProgressBar');
+    const statusEl = document.getElementById('scanStatus');
+    const detailEl = document.getElementById('scanDetail');
+
+    modal.classList.add('active');
+    progressBar.style.width = '0%';
+    statusEl.textContent = '正在启动扫描...';
+    detailEl.textContent = '';
 
     try {
+        // Start scan
         const response = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -434,17 +606,78 @@ async function scanPapers() {
 
         const data = await response.json();
 
-        if (data.success) {
-            showToast(`扫描完成：新增 ${data.added} 篇，更新 ${data.updated} 篇`, 'success');
-            await loadPapers();
-            await loadStats();
-        } else {
+        if (!data.success && data.error !== 'Scan already in progress') {
+            modal.classList.remove('active');
             showToast(`扫描失败：${data.error}`, 'error');
+            return;
         }
+
+        // Poll for progress
+        pollScanProgress(modal, progressBar, statusEl, detailEl);
+
     } catch (error) {
         console.error('Scan failed:', error);
+        modal.classList.remove('active');
         showToast('扫描失败', 'error');
     }
+}
+
+async function pollScanProgress(modal, progressBar, statusEl, detailEl) {
+    const poll = async () => {
+        try {
+            const response = await fetch('/api/scan/progress');
+            const progress = await response.json();
+
+            if (progress.total > 0) {
+                const percent = Math.round((progress.current / progress.total) * 100);
+                progressBar.style.width = `${percent}%`;
+                statusEl.textContent = `正在扫描 ${progress.current}/${progress.total} (${percent}%)`;
+            } else if (progress.running) {
+                statusEl.textContent = progress.current_file || '正在准备...';
+            }
+
+            if (progress.current_file) {
+                detailEl.textContent = progress.current_file;
+            }
+
+            if (progress.complete) {
+                progressBar.style.width = '100%';
+                statusEl.textContent = `扫描完成！新增 ${progress.added} 篇，更新 ${progress.updated} 篇`;
+                detailEl.textContent = progress.skipped > 0 ? `跳过 ${progress.skipped} 个文件` : '';
+
+                setTimeout(async () => {
+                    modal.classList.remove('active');
+                    await loadPapers();
+                    await loadStats();
+                    await loadTagsAndAuthors();
+                    showToast(`扫描完成：新增 ${progress.added} 篇，更新 ${progress.updated} 篇`, 'success');
+                }, 1500);
+                return;
+            }
+
+            if (progress.error) {
+                statusEl.textContent = `扫描出错：${progress.error}`;
+                setTimeout(() => modal.classList.remove('active'), 2000);
+                return;
+            }
+
+            if (progress.running) {
+                setTimeout(poll, 300);
+            } else if (!progress.complete) {
+                // Scan finished without complete flag
+                setTimeout(async () => {
+                    modal.classList.remove('active');
+                    await loadPapers();
+                    await loadStats();
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Progress poll failed:', error);
+            setTimeout(poll, 1000);
+        }
+    };
+
+    poll();
 }
 
 async function verifyPapers() {

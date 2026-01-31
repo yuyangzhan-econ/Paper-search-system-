@@ -8,7 +8,9 @@ import subprocess
 import platform
 import json
 import warnings
-from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
+import threading
+import time
+from flask import Flask, render_template, request, jsonify, send_file, send_from_directory, Response
 from flask_cors import CORS
 from werkzeug.utils import safe_join
 
@@ -29,6 +31,19 @@ app.config['JSON_AS_ASCII'] = False  # Support Chinese characters
 
 # Store the current papers directory
 PAPERS_DIR = os.environ.get('PAPERS_DIR', r'E:\研究')
+
+# Scan progress tracking
+scan_progress = {
+    'running': False,
+    'current': 0,
+    'total': 0,
+    'current_file': '',
+    'added': 0,
+    'updated': 0,
+    'skipped': 0,
+    'complete': False,
+    'error': None
+}
 
 
 def open_file_with_default_app(file_path: str) -> bool:
@@ -199,10 +214,51 @@ def api_get_pdf(paper_id):
     return send_file(file_path, mimetype='application/pdf')
 
 
+def scan_worker(path):
+    """Background worker for scanning papers."""
+    global scan_progress
+    scan_progress['running'] = True
+    scan_progress['complete'] = False
+    scan_progress['error'] = None
+    scan_progress['current'] = 0
+    scan_progress['total'] = 0
+    scan_progress['added'] = 0
+    scan_progress['updated'] = 0
+    scan_progress['skipped'] = 0
+    scan_progress['current_file'] = '正在计算文件数量...'
+
+    def progress_callback(current, total, filename):
+        scan_progress['current'] = current
+        scan_progress['total'] = total
+        scan_progress['current_file'] = filename
+
+    try:
+        added, updated, skipped = scanner.scan_directory(path, progress_callback)
+        scan_progress['added'] = added
+        scan_progress['updated'] = updated
+        scan_progress['skipped'] = skipped
+        scan_progress['complete'] = True
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        scan_progress['error'] = str(e)
+    finally:
+        scan_progress['running'] = False
+
+
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
-    """Scan directory for papers."""
-    global PAPERS_DIR
+    """Scan directory for papers (async with progress)."""
+    global PAPERS_DIR, scan_progress
+
+    # If scan is already running, return status
+    if scan_progress['running']:
+        return jsonify({
+            'success': False,
+            'error': 'Scan already in progress',
+            'progress': scan_progress
+        }), 409
+
     data = request.get_json() or {}
     path = data.get('path', PAPERS_DIR)
 
@@ -212,27 +268,38 @@ def api_scan():
     # Update global papers dir
     PAPERS_DIR = path
 
-    try:
-        result = scanner.scan_directory(path)
-        # Handle both old (2 values) and new (3 values) return formats
-        if len(result) == 3:
-            added, updated, skipped = result
-        else:
-            added, updated = result
-            skipped = 0
+    # Start background scan
+    thread = threading.Thread(target=scan_worker, args=(path,))
+    thread.daemon = True
+    thread.start()
 
-        return jsonify({
-            'success': True,
-            'added': added,
-            'updated': updated,
-            'skipped': skipped,
-            'total': added + updated,
-            'path': path
-        })
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
+    return jsonify({
+        'success': True,
+        'message': 'Scan started',
+        'path': path
+    })
+
+
+@app.route('/api/scan/progress', methods=['GET'])
+def api_scan_progress():
+    """Get current scan progress."""
+    return jsonify(scan_progress)
+
+
+@app.route('/api/scan/stream', methods=['GET'])
+def api_scan_stream():
+    """Stream scan progress via Server-Sent Events."""
+    def generate():
+        while True:
+            data = json.dumps(scan_progress)
+            yield f"data: {data}\n\n"
+            if scan_progress['complete'] or scan_progress['error'] or not scan_progress['running']:
+                break
+            time.sleep(0.3)
+        # Final update
+        yield f"data: {json.dumps(scan_progress)}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 
 @app.route('/api/verify', methods=['POST'])

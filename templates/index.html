@@ -113,7 +113,7 @@
 
     <!-- Edit Modal -->
     <div class="modal-overlay" id="editModal">
-        <div class="modal">
+        <div class="modal modal-lg">
             <div class="modal-header">
                 <h2 class="modal-title">编辑论文信息</h2>
                 <button class="modal-close" onclick="closeEditModal()">×</button>
@@ -124,25 +124,40 @@
                     <label class="form-label">标题</label>
                     <input type="text" class="form-input" id="editTitle">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">作者 (用逗号分隔)</label>
-                    <input type="text" class="form-input" id="editAuthors" placeholder="张三, 李四, John Doe">
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="form-label">作者</label>
+                        <div class="tag-input-container">
+                            <div class="tag-chips" id="authorChips"></div>
+                            <input type="text" class="tag-input" id="editAuthorsInput" placeholder="输入作者名后按 Enter 添加">
+                        </div>
+                        <input type="hidden" id="editAuthors">
+                    </div>
+                    <div class="form-group" style="width: 100px;">
+                        <label class="form-label">年份</label>
+                        <input type="text" class="form-input" id="editYear" placeholder="2024">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">标签 (用逗号分隔)</label>
-                    <input type="text" class="form-input" id="editTags" placeholder="行为经济学, 决策理论">
+                    <label class="form-label">标签</label>
+                    <div class="tag-input-container">
+                        <div class="tag-chips" id="tagChips"></div>
+                        <input type="text" class="tag-input" id="editTagsInput" placeholder="输入标签后按 Enter 添加">
+                    </div>
+                    <input type="hidden" id="editTags">
+                    <div class="tag-suggestions" id="tagSuggestions"></div>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">关键词 (用逗号分隔)</label>
-                    <input type="text" class="form-input" id="editKeywords">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">年份</label>
-                    <input type="text" class="form-input" id="editYear" placeholder="2024">
+                    <label class="form-label">关键词</label>
+                    <div class="tag-input-container">
+                        <div class="tag-chips" id="keywordChips"></div>
+                        <input type="text" class="tag-input" id="editKeywordsInput" placeholder="输入关键词后按 Enter 添加">
+                    </div>
+                    <input type="hidden" id="editKeywords">
                 </div>
                 <div class="form-group">
                     <label class="form-label">摘要</label>
-                    <textarea class="form-textarea" id="editAbstract" rows="4"></textarea>
+                    <textarea class="form-textarea" id="editAbstract" rows="3"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -187,6 +202,25 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
                 <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan Progress Modal -->
+    <div class="modal-overlay" id="scanModal">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2 class="modal-title">扫描论文</h2>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 2rem;">
+                <div class="scan-progress">
+                    <div class="scan-icon">📂</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="scanProgressBar" style="width: 0%"></div>
+                    </div>
+                    <div class="scan-status" id="scanStatus">正在准备...</div>
+                    <div class="scan-detail" id="scanDetail" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem;"></div>
+                </div>
             </div>
         </div>
     </div>

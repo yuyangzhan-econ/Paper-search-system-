@@ -45,7 +45,10 @@
                     <!-- Search Type Tabs -->
                     <div class="online-filters" style="margin-top: 1rem; justify-content: center;">
                         <button class="filter-chip active" data-type="keyword" onclick="setSearchType('keyword')">
-                            关键词搜索
+                            全部搜索
+                        </button>
+                        <button class="filter-chip" data-type="econ" onclick="setSearchType('econ')">
+                            经济学
                         </button>
                         <button class="filter-chip" data-type="author" onclick="setSearchType('author')">
                             作者搜索
@@ -53,6 +56,15 @@
                         <button class="filter-chip" data-type="journal" onclick="setSearchType('journal')">
                             期刊筛选
                         </button>
+                    </div>
+
+                    <!-- Source Selection -->
+                    <div class="online-filters" style="margin-top: 0.5rem; justify-content: center; gap: 0.25rem;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 0.5rem;">数据源:</span>
+                        <button class="filter-chip source-chip active" data-source="all" onclick="setSource('all')">全部</button>
+                        <button class="filter-chip source-chip" data-source="semantic_scholar" onclick="setSource('semantic_scholar')">Semantic Scholar</button>
+                        <button class="filter-chip source-chip" data-source="crossref" onclick="setSource('crossref')">CrossRef</button>
+                        <button class="filter-chip source-chip" data-source="arxiv" onclick="setSource('arxiv')">arXiv</button>
                     </div>
 
                     <!-- Journal Filters (hidden by default) -->
@@ -70,7 +82,7 @@
                     </span>
                     <div class="results-actions">
                         <span style="font-size: 0.85rem; color: var(--text-muted);">
-                            数据来源：Semantic Scholar, CrossRef, arXiv
+                            数据来源：OpenAlex, Semantic Scholar, CrossRef, arXiv
                         </span>
                     </div>
                 </div>
@@ -117,6 +129,7 @@
     <script>
         // State
         let searchType = 'keyword';
+        let searchSource = 'all';
         let selectedJournals = new Set();
         let searchTimeout = null;
 
@@ -139,6 +152,14 @@
             });
             document.getElementById('journalFilters').style.display = type === 'journal' ? 'block' : 'none';
             document.getElementById('authorInfo').style.display = 'none';
+        }
+
+        // Source Selection
+        function setSource(source) {
+            searchSource = source;
+            document.querySelectorAll('.source-chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.source === source);
+            });
         }
 
         // Load Journal Categories
@@ -228,8 +249,14 @@
                     const response = await fetch(`/api/online/journal-search?q=${encodeURIComponent(query)}&journals=${journals}`);
                     data = await response.json();
                     renderOnlineResults(data.results || []);
+                } else if (searchType === 'econ') {
+                    // Economics-specific search
+                    const response = await fetch(`/api/online/search?q=${encodeURIComponent(query)}&source=econ`);
+                    data = await response.json();
+                    renderOnlineResults(data.results || []);
                 } else {
-                    const response = await fetch(`/api/online/search?q=${encodeURIComponent(query)}`);
+                    // General search with source selection
+                    const response = await fetch(`/api/online/search?q=${encodeURIComponent(query)}&source=${searchSource}`);
                     data = await response.json();
                     renderOnlineResults(data.results || []);
                 }

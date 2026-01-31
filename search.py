@@ -306,10 +306,81 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
     return score
 
 
+def parse_advanced_query(query: str) -> dict:
+    """
+    Parse advanced search query with operators.
+    + means OR
+    * means AND
+    () for grouping
+
+    Returns a structure: {'type': 'and'|'or'|'term', 'terms': [...]}
+    """
+    query = query.strip()
+
+    # Simple term
+    if '+' not in query and '*' not in query and '(' not in query:
+        return {'type': 'term', 'value': query}
+
+    # Handle parentheses first (simple level, not nested)
+    # For simplicity, we'll handle flat structure
+
+    # Split by OR first (+)
+    if '+' in query:
+        parts = [p.strip() for p in query.split('+') if p.strip()]
+        if len(parts) > 1:
+            return {
+                'type': 'or',
+                'terms': [parse_advanced_query(p) for p in parts]
+            }
+
+    # Then split by AND (*)
+    if '*' in query:
+        parts = [p.strip() for p in query.split('*') if p.strip()]
+        if len(parts) > 1:
+            return {
+                'type': 'and',
+                'terms': [parse_advanced_query(p) for p in parts]
+            }
+
+    # Remove parentheses if wrapping
+    if query.startswith('(') and query.endswith(')'):
+        return parse_advanced_query(query[1:-1])
+
+    return {'type': 'term', 'value': query}
+
+
+def evaluate_query(paper: Dict, parsed_query: dict) -> float:
+    """Evaluate a parsed query against a paper."""
+    if parsed_query['type'] == 'term':
+        return calculate_relevance_score(paper, parsed_query['value'])
+    elif parsed_query['type'] == 'and':
+        # All terms must match
+        scores = [evaluate_query(paper, term) for term in parsed_query['terms']]
+        if all(s > 0 for s in scores):
+            return sum(scores)
+        return 0.0
+    elif parsed_query['type'] == 'or':
+        # Any term can match
+        scores = [evaluate_query(paper, term) for term in parsed_query['terms']]
+        return max(scores) if scores else 0.0
+
+    return 0.0
+
+
 def search(query: str, limit: int = 100) -> List[Dict]:
     """
     Perform comprehensive search across all papers.
     Returns papers sorted by relevance score.
+
+    Advanced syntax:
+    - Use + for OR (matches any term)
+    - Use * for AND (must match all terms)
+    - Use () for grouping (basic support)
+
+    Examples:
+    - "行为经济 + 决策" - matches either term
+    - "周黎安 * 行为" - must match both
+    - "经济 * (行为 + 决策)" - matches 经济 AND (行为 OR 决策)
     """
     query = query.strip() if query else ''
 
@@ -320,14 +391,27 @@ def search(query: str, limit: int = 100) -> List[Dict]:
         # Return all papers sorted by updated_at
         return all_papers[:limit]
 
+    # Check for advanced syntax
+    has_advanced = '+' in query or '*' in query or '(' in query
+
     # Calculate scores for all papers
     scored_papers = []
-    for paper in all_papers:
-        score = calculate_relevance_score(paper, query)
-        if score > 0:
-            paper_copy = dict(paper)
-            paper_copy['relevance_score'] = score
-            scored_papers.append(paper_copy)
+
+    if has_advanced:
+        parsed = parse_advanced_query(query)
+        for paper in all_papers:
+            score = evaluate_query(paper, parsed)
+            if score > 0:
+                paper_copy = dict(paper)
+                paper_copy['relevance_score'] = score
+                scored_papers.append(paper_copy)
+    else:
+        for paper in all_papers:
+            score = calculate_relevance_score(paper, query)
+            if score > 0:
+                paper_copy = dict(paper)
+                paper_copy['relevance_score'] = score
+                scored_papers.append(paper_copy)
 
     # Sort by score descending, then by title
     scored_papers.sort(key=lambda p: (-p.get('relevance_score', 0), p.get('title', '').lower()))

@@ -32,6 +32,19 @@ SKIP_PATTERNS = [
     '.DS_Store',
     'Thumbs.db',
     'desktop.ini',
+    '数据',
+    '工作',
+    '工作研究',
+    'data',
+    'code',
+    'codes',
+    'replication',
+    'Replication',
+    'appendix',
+    'supplement',
+    'figures',
+    'tables',
+    'results',
 ]
 
 # Common author name patterns in filenames
@@ -137,9 +150,9 @@ def extract_tags_from_path(folder_path: str, base_path: str) -> List[str]:
         # Skip unwanted folders
         if part and part != '.' and part != '..' and not part.startswith('.'):
             # Skip common non-tag folders
-            skip_folders = {'replication', 'data', 'code', 'figures', 'tables',
+            skip_folders = {'replication', 'data', 'code', 'codes', 'figures', 'tables',
                           'appendix', 'online', 'supplement', 'Replication Package',
-                          'results', '__MACOSX'}
+                          'results', '__MACOSX', '数据', '工作', '工作研究'}
             if part.lower() not in {s.lower() for s in skip_folders}:
                 tags.append(part)
 
