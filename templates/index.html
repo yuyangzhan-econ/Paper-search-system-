@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Search - 论文检索系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <div class="logo">
+                        <span class="logo-icon">📚</span>
+                        <div>
+                            <div class="logo-text">Paper Search</div>
+                            <div class="logo-subtitle">论文检索系统</div>
+                        </div>
+                    </div>
+                    <nav class="header-nav">
+                        <a href="/" class="nav-link active">本地文献</a>
+                        <a href="/online" class="nav-link">在线搜索</a>
+                        <button class="nav-link" onclick="openSettings()">⚙️ 设置</button>
+                    </nav>
+                </div>
+            </header>
+
+            <!-- Search Section -->
+            <section class="search-section">
+                <div class="search-container">
+                    <div class="search-box">
+                        <input type="text"
+                               id="searchInput"
+                               class="search-input"
+                               placeholder="搜索论文标题、作者、关键词..."
+                               autocomplete="off">
+                        <span class="search-icon">🔍</span>
+                        <button class="search-clear" onclick="clearSearch()">✕</button>
+                        <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
+                    </div>
+                    <div class="stats-bar">
+                        <span class="stat-item">
+                            📄 <span class="stat-value" id="statPapers">0</span> 篇论文
+                        </span>
+                        <span class="stat-item">
+                            🏷️ <span class="stat-value" id="statTags">0</span> 个标签
+                        </span>
+                        <span class="stat-item">
+                            👤 <span class="stat-value" id="statAuthors">0</span> 位作者
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section">
+                <div class="results-list">
+                    <div class="results-header">
+                        <span class="results-title">
+                            搜索结果 (<span class="results-count" id="resultsCount">0</span>)
+                        </span>
+                        <div class="results-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="scanPapers()">
+                                🔄 扫描文件夹
+                            </button>
+                        </div>
+                    </div>
+                    <div class="papers-grid" id="papersGrid">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📂</div>
+                            <div class="empty-state-title">开始探索您的论文库</div>
+                            <div class="empty-state-text">
+                                在上方搜索框中输入论文标题、作者名或关键词进行搜索，
+                                或点击"扫描文件夹"导入您的论文。
+                            </div>
+                            <button class="btn btn-primary btn-lg" onclick="scanPapers()">
+                                扫描论文文件夹
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview Panel -->
+                <div class="preview-panel" id="previewPanel">
+                    <div class="preview-header">
+                        <span class="preview-title">论文预览</span>
+                        <div class="preview-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="openCurrentPaper()" id="btnOpenPaper" disabled>
+                                📂 打开
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="editCurrentPaper()" id="btnEditPaper" disabled>
+                                ✏️ 编辑
+                            </button>
+                        </div>
+                    </div>
+                    <div class="preview-content">
+                        <div class="preview-placeholder" id="previewPlaceholder">
+                            <div class="preview-placeholder-icon">📄</div>
+                            <p>选择一篇论文查看预览</p>
+                        </div>
+                        <div class="preview-info" id="previewInfo" style="display: none;"></div>
+                        <div class="preview-pdf" id="previewPdf" style="display: none;"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal-overlay" id="editModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">编辑论文信息</h2>
+                <button class="modal-close" onclick="closeEditModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editPaperId">
+                <div class="form-group">
+                    <label class="form-label">标题</label>
+                    <input type="text" class="form-input" id="editTitle">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">作者 (用逗号分隔)</label>
+                    <input type="text" class="form-input" id="editAuthors" placeholder="张三, 李四, John Doe">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">标签 (用逗号分隔)</label>
+                    <input type="text" class="form-input" id="editTags" placeholder="行为经济学, 决策理论">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">关键词 (用逗号分隔)</label>
+                    <input type="text" class="form-input" id="editKeywords">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">年份</label>
+                    <input type="text" class="form-input" id="editYear" placeholder="2024">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">摘要</label>
+                    <textarea class="form-textarea" id="editAbstract" rows="4"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                <button class="btn btn-primary" onclick="savePaper()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 class="modal-title">设置</h2>
+                <button class="modal-close" onclick="closeSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-panel">
+                    <div class="settings-section">
+                        <h3 class="settings-title">论文文件夹</h3>
+                        <div class="form-group">
+                            <input type="text" class="form-input" id="settingsPapersDir"
+                                   placeholder="E:\研究">
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--spacing-md);">
+                            设置您的论文存放目录，系统将扫描此目录下的所有 PDF 文件。
+                        </p>
+                    </div>
+                    <div class="settings-section">
+                        <h3 class="settings-title">数据管理</h3>
+                        <div style="display: flex; gap: var(--spacing-sm);">
+                            <button class="btn btn-secondary" onclick="verifyPapers()">
+                                验证文件
+                            </button>
+                            <button class="btn btn-secondary" onclick="cleanupPapers()">
+                                清理失效
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+                <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

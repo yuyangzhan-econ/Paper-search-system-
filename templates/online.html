@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Search - 在线文献检索</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-layout">
+        <div class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <div class="header-content">
+                    <div class="logo">
+                        <span class="logo-icon">🌐</span>
+                        <div>
+                            <div class="logo-text">Online Search</div>
+                            <div class="logo-subtitle">在线文献检索</div>
+                        </div>
+                    </div>
+                    <nav class="header-nav">
+                        <a href="/" class="nav-link">本地文献</a>
+                        <a href="/online" class="nav-link active">在线搜索</a>
+                    </nav>
+                </div>
+            </header>
+
+            <!-- Search Section -->
+            <section class="search-section">
+                <div class="search-container">
+                    <div class="search-box">
+                        <input type="text"
+                               id="onlineSearchInput"
+                               class="search-input"
+                               placeholder="搜索学术论文、作者..."
+                               autocomplete="off">
+                        <span class="search-icon">🔍</span>
+                        <button class="search-clear" onclick="clearOnlineSearch()">✕</button>
+                    </div>
+
+                    <!-- Search Type Tabs -->
+                    <div class="online-filters" style="margin-top: 1rem; justify-content: center;">
+                        <button class="filter-chip active" data-type="keyword" onclick="setSearchType('keyword')">
+                            关键词搜索
+                        </button>
+                        <button class="filter-chip" data-type="author" onclick="setSearchType('author')">
+                            作者搜索
+                        </button>
+                        <button class="filter-chip" data-type="journal" onclick="setSearchType('journal')">
+                            期刊筛选
+                        </button>
+                    </div>
+
+                    <!-- Journal Filters (hidden by default) -->
+                    <div id="journalFilters" style="display: none; margin-top: 1rem;">
+                        <div id="journalCategories"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" style="flex-direction: column;">
+                <div class="results-header" style="margin-bottom: 1rem;">
+                    <span class="results-title">
+                        搜索结果 (<span class="results-count" id="onlineResultsCount">0</span>)
+                    </span>
+                    <div class="results-actions">
+                        <span style="font-size: 0.85rem; color: var(--text-muted);">
+                            数据来源：Semantic Scholar, CrossRef, arXiv
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="onlineLoading" style="display: none; text-align: center; padding: 2rem;">
+                    <div class="loading-spinner" style="margin: 0 auto;"></div>
+                    <p style="margin-top: 1rem; color: var(--text-muted);">正在搜索学术数据库...</p>
+                </div>
+
+                <!-- Author Info Card -->
+                <div id="authorInfo" style="display: none;" class="online-result-card">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div style="font-size: 3rem;">👤</div>
+                        <div>
+                            <h3 id="authorName" style="font-family: var(--font-serif); font-size: 1.25rem;"></h3>
+                            <div style="display: flex; gap: 1.5rem; margin-top: 0.5rem; color: var(--text-secondary);">
+                                <span>📄 <span id="authorPaperCount">0</span> 篇论文</span>
+                                <span>📊 <span id="authorCitations">0</span> 次引用</span>
+                                <span>📈 H-index: <span id="authorHIndex">0</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results List -->
+                <div id="onlineResults" style="flex: 1; overflow-y: auto;">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🌐</div>
+                        <div class="empty-state-title">搜索全球学术文献</div>
+                        <div class="empty-state-text">
+                            输入关键词搜索经济学五大刊、政治学三大刊等顶级期刊的论文，
+                            或输入学者姓名查看其发表记录。
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // State
+        let searchType = 'keyword';
+        let selectedJournals = new Set();
+        let searchTimeout = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadJournalCategories();
+            document.getElementById('onlineSearchInput').addEventListener('input', handleOnlineSearch);
+            document.getElementById('onlineSearchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    performOnlineSearch();
+                }
+            });
+        });
+
+        // Search Type Toggle
+        function setSearchType(type) {
+            searchType = type;
+            document.querySelectorAll('.filter-chip[data-type]').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.type === type);
+            });
+            document.getElementById('journalFilters').style.display = type === 'journal' ? 'block' : 'none';
+            document.getElementById('authorInfo').style.display = 'none';
+        }
+
+        // Load Journal Categories
+        async function loadJournalCategories() {
+            try {
+                const response = await fetch('/api/online/journals');
+                const data = await response.json();
+
+                const container = document.getElementById('journalCategories');
+                let html = '';
+
+                for (const [category, journals] of Object.entries(data.categories)) {
+                    html += `
+                        <div class="journal-category">
+                            <div class="journal-category-title">${category}</div>
+                            <div class="journal-chips">
+                                ${journals.map(j => `
+                                    <button class="filter-chip" data-journal="${j.key}"
+                                            onclick="toggleJournal('${j.key}', this)">
+                                        ${j.abbr}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Failed to load journals:', error);
+            }
+        }
+
+        // Toggle Journal Selection
+        function toggleJournal(key, element) {
+            if (selectedJournals.has(key)) {
+                selectedJournals.delete(key);
+                element.classList.remove('active');
+            } else {
+                selectedJournals.add(key);
+                element.classList.add('active');
+            }
+        }
+
+        // Handle Search Input
+        function handleOnlineSearch(e) {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                if (e.target.value.length >= 2) {
+                    performOnlineSearch();
+                }
+            }, 500);
+        }
+
+        // Perform Search
+        async function performOnlineSearch() {
+            const query = document.getElementById('onlineSearchInput').value.trim();
+            if (!query) return;
+
+            const loading = document.getElementById('onlineLoading');
+            const results = document.getElementById('onlineResults');
+            const authorInfo = document.getElementById('authorInfo');
+
+            loading.style.display = 'block';
+            results.innerHTML = '';
+            authorInfo.style.display = 'none';
+
+            try {
+                let data;
+
+                if (searchType === 'author') {
+                    const response = await fetch(`/api/online/author?name=${encodeURIComponent(query)}`);
+                    data = await response.json();
+
+                    if (data.success && data.result.author) {
+                        const author = data.result.author;
+                        authorInfo.style.display = 'block';
+                        document.getElementById('authorName').textContent = author.name;
+                        document.getElementById('authorPaperCount').textContent = author.paper_count || 0;
+                        document.getElementById('authorCitations').textContent = author.citation_count || 0;
+                        document.getElementById('authorHIndex').textContent = author.h_index || 0;
+                    }
+
+                    renderOnlineResults(data.result.papers || []);
+                } else if (searchType === 'journal' && selectedJournals.size > 0) {
+                    const journals = Array.from(selectedJournals).join(',');
+                    const response = await fetch(`/api/online/journal-search?q=${encodeURIComponent(query)}&journals=${journals}`);
+                    data = await response.json();
+                    renderOnlineResults(data.results || []);
+                } else {
+                    const response = await fetch(`/api/online/search?q=${encodeURIComponent(query)}`);
+                    data = await response.json();
+                    renderOnlineResults(data.results || []);
+                }
+
+            } catch (error) {
+                console.error('Search error:', error);
+                showToast('搜索失败，请稍后重试', 'error');
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Render Results
+        function renderOnlineResults(papers) {
+            const container = document.getElementById('onlineResults');
+            const countEl = document.getElementById('onlineResultsCount');
+            countEl.textContent = papers.length;
+
+            if (papers.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <div class="empty-state-title">未找到相关论文</div>
+                        <div class="empty-state-text">尝试使用不同的关键词或筛选条件</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = papers.map(paper => `
+                <div class="online-result-card">
+                    <div class="online-result-title">
+                        <a href="${paper.url || '#'}" target="_blank" rel="noopener">
+                            ${escapeHtml(paper.title || 'Untitled')}
+                        </a>
+                    </div>
+                    <div class="online-result-authors">${escapeHtml(paper.authors || '')}</div>
+                    ${paper.venue ? `<div class="online-result-venue">${escapeHtml(paper.venue)}</div>` : ''}
+                    ${paper.abstract ? `<div class="online-result-abstract">${escapeHtml(paper.abstract)}</div>` : ''}
+                    <div class="online-result-meta">
+                        ${paper.year ? `<span>📅 ${paper.year}</span>` : ''}
+                        ${paper.citations ? `<span>📊 ${paper.citations} citations</span>` : ''}
+                        ${paper.pdf_url ? `<a href="${paper.pdf_url}" target="_blank" rel="noopener">📥 PDF</a>` : ''}
+                        ${paper.source ? `<span style="margin-left: auto; opacity: 0.7;">${paper.source}</span>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Clear Search
+        function clearOnlineSearch() {
+            document.getElementById('onlineSearchInput').value = '';
+            document.getElementById('onlineResults').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🌐</div>
+                    <div class="empty-state-title">搜索全球学术文献</div>
+                    <div class="empty-state-text">
+                        输入关键词搜索经济学五大刊、政治学三大刊等顶级期刊的论文，
+                        或输入学者姓名查看其发表记录。
+                    </div>
+                </div>
+            `;
+            document.getElementById('onlineResultsCount').textContent = '0';
+            document.getElementById('authorInfo').style.display = 'none';
+        }
+
+        // Utility: Escape HTML
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Toast
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+    </script>
+</body>
+</html>
