@@ -1,5 +1,6 @@
 """
 Advanced search engine with fuzzy matching and Chinese/English name support.
+Improved search accuracy and ranking.
 """
 
 import re
@@ -11,16 +12,16 @@ import database as db
 
 # Predefined tag synonyms for common research fields
 TAG_SYNONYMS = {
-    '行为经济学': ['行为经济', '行为', 'behavioral economics', 'behavioral', 'behaviour'],
+    '行为经济学': ['行为经济', 'behavioral economics', 'behavioral', 'behaviour'],
     '政治经济学': ['政经', '政治经济', 'political economy', 'pol econ'],
     '行为政治经济学': ['行为政经', 'behavioral political economy'],
     '决策理论': ['决策', 'decision theory', 'decision making', 'choice theory'],
     '博弈论': ['博弈', 'game theory', 'games'],
     '机制设计': ['mechanism design', 'market design'],
-    '发展经济学': ['发展', 'development economics', 'development'],
+    '发展经济学': ['发展', 'development economics', 'development econ'],
     '劳动经济学': ['劳动', '劳经', 'labor economics', 'labour'],
     '公共经济学': ['公共', '财政', 'public economics', 'public finance'],
-    '环境经济学': ['环境', 'environmental economics', 'environment'],
+    '环境经济学': ['环境', 'environmental economics', 'environment econ'],
     '产业组织': ['IO', 'industrial organization', 'industrial org'],
     '国际贸易': ['贸易', 'international trade', 'trade'],
     '金融': ['finance', '金融学', 'financial economics'],
@@ -63,23 +64,26 @@ def normalize_chinese_name(name: str) -> List[str]:
                 # Surname first
                 f"{surname.capitalize()} {given_name.capitalize()}",
                 f"{surname.capitalize()}, {given_name.capitalize()}",
+                f"{surname} {given_name}",
                 # Given name first (Western style)
                 f"{given_name.capitalize()} {surname.capitalize()}",
+                f"{given_name} {surname}",
                 # With apostrophe for multi-character given names
                 f"{'\''.join(p.capitalize() for p in given_name_parts)} {surname.capitalize()}",
                 f"{surname.capitalize()} {'\''.join(p.capitalize() for p in given_name_parts)}",
-                # Lowercase versions
-                f"{surname} {given_name}",
-                f"{given_name} {surname}",
+                # Hyphenated
+                f"{'-'.join(p.capitalize() for p in given_name_parts)} {surname.capitalize()}",
+                f"{surname.capitalize()} {'-'.join(p.capitalize() for p in given_name_parts)}",
             ])
 
             # First letter abbreviations
-            if len(given_name_parts) >= 2:
+            if len(given_name_parts) >= 1:
                 initials = ''.join(p[0].upper() for p in given_name_parts)
                 variations.append(f"{initials} {surname.capitalize()}")
                 variations.append(f"{surname.capitalize()}, {initials}")
+                variations.append(f"{given_name_parts[0].capitalize()} {surname.capitalize()}")
 
-    return list(set(v for v in variations if v))
+    return list(set(v.lower() for v in variations if v))
 
 
 def normalize_english_name(name: str) -> List[str]:
@@ -96,52 +100,84 @@ def normalize_english_name(name: str) -> List[str]:
     # Remove special characters for matching
     clean_name = re.sub(r"['\-,.]", '', name)
     variations.append(clean_name.lower())
+    variations.append(re.sub(r'\s+', '', clean_name.lower()))
 
     # Split name parts
     parts = name.replace(',', ' ').split()
     if len(parts) >= 2:
         # Try different orderings
-        variations.append(' '.join(parts))
-        variations.append(' '.join(reversed(parts)))
-        variations.append(f"{parts[-1]}, {' '.join(parts[:-1])}")
-        variations.append(f"{parts[0]}, {' '.join(parts[1:])}")
+        variations.append(' '.join(parts).lower())
+        variations.append(' '.join(reversed(parts)).lower())
+        variations.append(f"{parts[-1]}, {' '.join(parts[:-1])}".lower())
+        variations.append(f"{parts[0]}, {' '.join(parts[1:])}".lower())
+        # Without spaces
+        variations.append(''.join(parts).lower())
+        variations.append(''.join(reversed(parts)).lower())
 
     return list(set(v for v in variations if v))
 
 
-def match_author(query: str, author_string: str) -> bool:
-    """Check if query matches any author in the author string."""
+def match_author(query: str, author_string: str) -> Tuple[bool, float]:
+    """
+    Check if query matches any author in the author string.
+    Returns (match, score).
+    """
     if not query or not author_string:
-        return False
+        return False, 0.0
 
     query = query.lower().strip()
-    authors = [a.strip().lower() for a in author_string.split(',')]
+    query_clean = re.sub(r"['\-,.\s]", '', query)
 
     # Generate query variations
     query_variations = set()
     query_variations.update(normalize_chinese_name(query))
     query_variations.update(normalize_english_name(query))
     query_variations.add(query)
+    query_variations.add(query_clean)
 
-    # Check each author
+    # Parse authors (split by comma, semicolon, and, &)
+    author_string_lower = author_string.lower()
+    authors = re.split(r'[,;]|\s+and\s+|\s*&\s*', author_string_lower)
+    authors = [a.strip() for a in authors if a.strip()]
+
+    best_score = 0.0
+
     for author in authors:
-        # Direct match
-        if query in author or author in query:
-            return True
+        author_clean = re.sub(r"['\-,.\s]", '', author)
 
         # Generate author variations
         author_variations = set()
         author_variations.update(normalize_chinese_name(author))
         author_variations.update(normalize_english_name(author))
         author_variations.add(author)
+        author_variations.add(author_clean)
 
-        # Check for any match
+        # Check for exact match first
+        if query in author_variations or query_clean in author_variations:
+            return True, 1.0
+
+        if author in query_variations or author_clean in query_variations:
+            return True, 1.0
+
+        # Check for partial match
         for qv in query_variations:
+            if not qv:
+                continue
             for av in author_variations:
-                if qv and av and (qv in av or av in qv):
-                    return True
+                if not av:
+                    continue
+                # Exact substring match (must be significant portion)
+                if len(qv) >= 3 and len(av) >= 3:
+                    if qv == av:
+                        return True, 1.0
+                    if qv in av and len(qv) >= len(av) * 0.5:
+                        score = len(qv) / len(av)
+                        best_score = max(best_score, score)
+                    elif av in qv and len(av) >= len(qv) * 0.5:
+                        score = len(av) / len(qv)
+                        best_score = max(best_score, score)
 
-    return False
+    return best_score >= 0.6, best_score
 
 
 def expand_tag_query(query: str) -> Set[str]:
@@ -151,20 +187,17 @@ def expand_tag_query(query: str) -> Set[str]:
 
     # Use jieba for Chinese word segmentation
     words = list(jieba.cut(query))
-    expanded.update(words)
+    expanded.update(w for w in words if len(w) > 1)
 
     # Check predefined synonyms
     for canonical, synonyms in TAG_SYNONYMS.items():
         all_forms = [canonical.lower()] + [s.lower() for s in synonyms]
 
         # If query matches any form, add all forms
-        if any(query in f or f in query for f in all_forms):
+        if any(query == f for f in all_forms):
             expanded.update(all_forms)
-
-        # Partial matching
-        for word in words:
-            if any(word in f or f in word for f in all_forms):
-                expanded.update(all_forms)
+        elif any(query in f or f in query for f in all_forms):
+            expanded.update(all_forms)
 
     return expanded
 
@@ -178,7 +211,7 @@ def match_tag(query: str, tag_string: str) -> Tuple[bool, float]:
         return False, 0.0
 
     query = query.lower().strip()
-    tags = [t.strip().lower() for t in tag_string.split(',')]
+    tags = [t.strip().lower() for t in tag_string.split(',') if t.strip()]
 
     # Expand query with synonyms
     expanded_queries = expand_tag_query(query)
@@ -186,93 +219,118 @@ def match_tag(query: str, tag_string: str) -> Tuple[bool, float]:
     best_score = 0.0
 
     for tag in tags:
-        # Exact match
+        # Exact match - highest score
         if query == tag:
             return True, 1.0
 
+        # Check expanded queries for exact match
+        for eq in expanded_queries:
+            if eq == tag:
+                return True, 0.95
+
         # Direct containment
         if query in tag:
-            score = len(query) / len(tag)
+            score = len(query) / len(tag) * 0.8
             best_score = max(best_score, score)
         elif tag in query:
-            score = len(tag) / len(query)
+            score = len(tag) / len(query) * 0.7
             best_score = max(best_score, score)
 
         # Expanded query match
         for eq in expanded_queries:
-            if eq in tag or tag in eq:
-                score = 0.7 * min(len(eq), len(tag)) / max(len(eq), len(tag))
+            if eq in tag:
+                score = 0.6 * len(eq) / len(tag)
+                best_score = max(best_score, score)
+            elif tag in eq:
+                score = 0.5 * len(tag) / len(eq)
                 best_score = max(best_score, score)
 
-    return best_score > 0.3, best_score
+    return best_score >= 0.4, best_score
 
 
 def calculate_relevance_score(paper: Dict, query: str) -> float:
     """Calculate relevance score for a paper given a query."""
     score = 0.0
-    query = query.lower()
+    query_lower = query.lower().strip()
+
+    # Empty query returns all
+    if not query_lower:
+        return 1.0
+
+    title = paper.get('title', '').lower()
+    authors = paper.get('authors', '')
+    tags = paper.get('tags', '')
+    keywords = paper.get('keywords', '').lower()
+    filename = paper.get('file_name', '').lower()
+    abstract = paper.get('abstract', '').lower()
 
     # Title match (highest weight)
-    if query in paper.get('title', '').lower():
-        score += 10.0
-        if paper.get('title', '').lower().startswith(query):
-            score += 5.0
+    if query_lower in title:
+        # Exact word match in title
+        if re.search(r'\b' + re.escape(query_lower) + r'\b', title):
+            score += 15.0
+            # Title starts with query
+            if title.startswith(query_lower):
+                score += 5.0
+        else:
+            score += 8.0
 
     # Author match
-    if match_author(query, paper.get('authors', '')):
-        score += 8.0
+    author_match, author_score = match_author(query, authors)
+    if author_match:
+        score += 12.0 * author_score
 
     # Tag match
-    tag_match, tag_score = match_tag(query, paper.get('tags', ''))
+    tag_match, tag_score = match_tag(query, tags)
     if tag_match:
-        score += 6.0 * tag_score
+        score += 8.0 * tag_score
 
     # Keyword match
-    if query in paper.get('keywords', '').lower():
-        score += 4.0
+    if query_lower in keywords:
+        if re.search(r'\b' + re.escape(query_lower) + r'\b', keywords):
+            score += 6.0
+        else:
+            score += 3.0
 
-    # Filename match
-    if query in paper.get('file_name', '').lower():
-        score += 2.0
+    # Abstract match
+    if query_lower in abstract:
+        if re.search(r'\b' + re.escape(query_lower) + r'\b', abstract):
+            score += 4.0
+        else:
+            score += 2.0
+
+    # Filename match (low priority)
+    if query_lower in filename:
+        score += 1.0
 
     return score
 
 
-def search(query: str, limit: int = 50) -> List[Dict]:
+def search(query: str, limit: int = 100) -> List[Dict]:
     """
     Perform comprehensive search across all papers.
-    Combines FTS search with fuzzy matching.
+    Returns papers sorted by relevance score.
     """
-    if not query or not query.strip():
-        return db.get_all_papers()[:limit]
+    query = query.strip() if query else ''
 
-    query = query.strip()
-
-    # Get all papers for fuzzy matching
+    # Get all papers
     all_papers = db.get_all_papers()
+
+    if not query:
+        # Return all papers sorted by updated_at
+        return all_papers[:limit]
 
     # Calculate scores for all papers
     scored_papers = []
     for paper in all_papers:
         score = calculate_relevance_score(paper, query)
         if score > 0:
-            paper_with_score = dict(paper)
-            paper_with_score['relevance_score'] = score
-            scored_papers.append(paper_with_score)
+            paper_copy = dict(paper)
+            paper_copy['relevance_score'] = score
+            scored_papers.append(paper_copy)
 
-    # Also try FTS search
-    fts_results = db.search_papers_fts(query, limit)
-    fts_ids = {p['id'] for p in fts_results}
-
-    # Add FTS results that weren't found by fuzzy search
-    for paper in fts_results:
-        if not any(p['id'] == paper['id'] for p in scored_papers):
-            paper_with_score = dict(paper)
-            paper_with_score['relevance_score'] = 5.0  # Base score for FTS matches
-            scored_papers.append(paper_with_score)
-
-    # Sort by score descending
-    scored_papers.sort(key=lambda p: p.get('relevance_score', 0), reverse=True)
+    # Sort by score descending, then by title
+    scored_papers.sort(key=lambda p: (-p.get('relevance_score', 0), p.get('title', '').lower()))
 
     return scored_papers[:limit]
 
@@ -280,7 +338,7 @@ def search(query: str, limit: int = 50) -> List[Dict]:
 def get_suggestions(query: str, limit: int = 10) -> List[Dict]:
     """
     Get search suggestions with type hints.
-    Returns list of {text, type, count} items.
+    Returns list of {text, type, count, icon} items.
     """
     if not query or len(query) < 1:
         return []
@@ -294,7 +352,7 @@ def get_suggestions(query: str, limit: int = 10) -> List[Dict]:
     # Collect unique authors
     author_counts = {}
     for paper in all_papers:
-        for author in paper.get('authors', '').split(','):
+        for author in re.split(r'[,;]|\s+and\s+|\s*&\s*', paper.get('authors', '')):
             author = author.strip()
             if author and query in author.lower():
                 author_counts[author] = author_counts.get(author, 0) + 1
@@ -310,11 +368,12 @@ def get_suggestions(query: str, limit: int = 10) -> List[Dict]:
     # Collect matching titles
     titles = []
     for paper in all_papers:
-        if query in paper.get('title', '').lower():
-            titles.append(paper['title'])
+        title = paper.get('title', '')
+        if query in title.lower():
+            titles.append(title)
 
-    # Build suggestions
-    for author, count in sorted(author_counts.items(), key=lambda x: -x[1]):
+    # Build suggestions - prioritize by count
+    for author, count in sorted(author_counts.items(), key=lambda x: -x[1])[:limit]:
         suggestions.append({
             'text': author,
             'type': 'author',
@@ -322,7 +381,7 @@ def get_suggestions(query: str, limit: int = 10) -> List[Dict]:
             'icon': '👤'
         })
 
-    for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1]):
+    for tag, count in sorted(tag_counts.items(), key=lambda x: -x[1])[:limit]:
         suggestions.append({
             'text': tag,
             'type': 'tag',

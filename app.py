@@ -7,9 +7,13 @@ import os
 import subprocess
 import platform
 import json
+import warnings
 from flask import Flask, render_template, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import safe_join
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
 
 import database as db
 import search
@@ -62,7 +66,7 @@ def online():
 def api_search():
     """Search papers."""
     query = request.args.get('q', '').strip()
-    limit = min(int(request.args.get('limit', 50)), 100)
+    limit = min(int(request.args.get('limit', 100)), 200)
 
     results = search.search(query, limit=limit)
     return jsonify({
@@ -94,6 +98,45 @@ def api_get_papers():
         'success': True,
         'count': len(papers),
         'papers': papers
+    })
+
+
+@app.route('/api/papers', methods=['POST'])
+def api_add_paper():
+    """Manually add a new paper."""
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+    # Required fields
+    title = data.get('title', '').strip()
+    if not title:
+        return jsonify({'success': False, 'error': 'Title is required'}), 400
+
+    # Optional file path
+    file_path = data.get('file_path', '').strip()
+    if file_path and not os.path.exists(file_path):
+        return jsonify({'success': False, 'error': f'File not found: {file_path}'}), 400
+
+    # Build paper data
+    paper_data = {
+        'title': title,
+        'file_path': file_path or f'manual_{title[:50]}',
+        'file_name': os.path.basename(file_path) if file_path else title[:50],
+        'folder_path': os.path.dirname(file_path) if file_path else '',
+        'authors': data.get('authors', ''),
+        'tags': data.get('tags', ''),
+        'keywords': data.get('keywords', ''),
+        'year': data.get('year', ''),
+        'abstract': data.get('abstract', ''),
+    }
+
+    paper_id = db.add_paper(**paper_data)
+    paper = db.get_paper(paper_id)
+
+    return jsonify({
+        'success': True,
+        'paper': paper
     })
 
 
@@ -159,21 +202,36 @@ def api_get_pdf(paper_id):
 @app.route('/api/scan', methods=['POST'])
 def api_scan():
     """Scan directory for papers."""
+    global PAPERS_DIR
     data = request.get_json() or {}
     path = data.get('path', PAPERS_DIR)
 
     if not os.path.exists(path):
         return jsonify({'success': False, 'error': f'Directory not found: {path}'}), 400
 
+    # Update global papers dir
+    PAPERS_DIR = path
+
     try:
-        added, updated = scanner.scan_directory(path)
+        result = scanner.scan_directory(path)
+        # Handle both old (2 values) and new (3 values) return formats
+        if len(result) == 3:
+            added, updated, skipped = result
+        else:
+            added, updated = result
+            skipped = 0
+
         return jsonify({
             'success': True,
             'added': added,
             'updated': updated,
+            'skipped': skipped,
+            'total': added + updated,
             'path': path
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -258,6 +316,8 @@ def api_online_search():
             results = online_search.search_crossref(query, limit)
         elif source == 'arxiv':
             results = online_search.search_arxiv(query, limit)
+        elif source == 'econ':
+            results = online_search.search_econ_papers(query, limit)
         else:
             results = online_search.search_all(query, limit)
 
@@ -268,6 +328,8 @@ def api_online_search():
             'results': results
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
