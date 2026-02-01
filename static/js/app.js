@@ -365,6 +365,9 @@ function selectPaper(paperId) {
         .catch(err => console.error('Failed to load paper:', err));
 }
 
+// Track if PDF is loading to prevent multiple loads
+let pdfLoadingPaperId = null;
+
 function showPreview(paper) {
     const placeholder = document.getElementById('previewPlaceholder');
     const info = document.getElementById('previewInfo');
@@ -387,37 +390,48 @@ function showPreview(paper) {
         ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
     `;
 
-    // Auto-load PDF preview with loading indicator
+    // Show load button instead of auto-loading (faster response)
     pdf.innerHTML = `
         <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div class="loading-spinner"></div>
-            <p style="margin-top: 1rem;">正在加载预览...</p>
-            <button class="btn btn-secondary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
-                🔄 重新加载
+            <div class="preview-placeholder-icon">📄</div>
+            <p>点击加载PDF预览</p>
+            <button class="btn btn-primary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
+                📄 加载预览
             </button>
         </div>
     `;
-
-    // Load PDF with a slight delay to prevent UI blocking
-    setTimeout(() => {
-        loadPdfPreview(paper.id);
-    }, 100);
 }
 
 function loadPdfPreview(paperId) {
-    const pdf = document.getElementById('previewPdf');
-    const iframe = document.createElement('iframe');
-    iframe.src = `/api/pdf/${paperId}#toolbar=0`;
-    iframe.title = 'PDF Preview';
-    iframe.loading = 'lazy';
+    // Prevent double-loading
+    if (pdfLoadingPaperId === paperId) return;
+    pdfLoadingPaperId = paperId;
 
-    // Show loading until iframe loads
+    const pdf = document.getElementById('previewPdf');
+
+    // Show loading state
+    pdf.innerHTML = `
+        <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 1rem;">正在加载...</p>
+        </div>
+    `;
+
+    // Create iframe with minimal options for speed
+    const iframe = document.createElement('iframe');
+    iframe.src = `/api/pdf/${paperId}#toolbar=0&view=FitH`;
+    iframe.title = 'PDF Preview';
+    iframe.style.cssText = 'width:100%;height:100%;border:none;';
+
+    // Handle load complete
     iframe.onload = () => {
+        pdfLoadingPaperId = null;
         const loading = document.getElementById('pdfLoading');
-        if (loading) loading.style.display = 'none';
+        if (loading) loading.remove();
     };
 
     iframe.onerror = () => {
+        pdfLoadingPaperId = null;
         pdf.innerHTML = `
             <div class="preview-placeholder" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                 <div class="preview-placeholder-icon">⚠️</div>
@@ -429,11 +443,6 @@ function loadPdfPreview(paperId) {
         `;
     };
 
-    // Clear existing content and add iframe
-    const existingIframe = pdf.querySelector('iframe');
-    if (existingIframe) {
-        existingIframe.remove();
-    }
     pdf.appendChild(iframe);
 }
 

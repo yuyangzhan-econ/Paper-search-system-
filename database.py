@@ -37,42 +37,54 @@ def init_db():
             keywords TEXT DEFAULT '',
             year TEXT DEFAULT '',
             abstract TEXT DEFAULT '',
+            details TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # Full-text search virtual table
+    # Add details column if it doesn't exist (for existing databases)
+    try:
+        cursor.execute('ALTER TABLE papers ADD COLUMN details TEXT DEFAULT ""')
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Full-text search virtual table (includes details for deep searching)
     cursor.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
-            title, authors, tags, keywords, abstract, file_name,
+            title, authors, tags, keywords, abstract, file_name, details,
             content='papers',
             content_rowid='id',
             tokenize='unicode61'
         )
     ''')
 
-    # Triggers to keep FTS in sync
+    # Drop old triggers first to recreate with details field
+    cursor.execute('DROP TRIGGER IF EXISTS papers_ai')
+    cursor.execute('DROP TRIGGER IF EXISTS papers_ad')
+    cursor.execute('DROP TRIGGER IF EXISTS papers_au')
+
+    # Triggers to keep FTS in sync (including details field)
     cursor.execute('''
         CREATE TRIGGER IF NOT EXISTS papers_ai AFTER INSERT ON papers BEGIN
-            INSERT INTO papers_fts(rowid, title, authors, tags, keywords, abstract, file_name)
-            VALUES (new.id, new.title, new.authors, new.tags, new.keywords, new.abstract, new.file_name);
+            INSERT INTO papers_fts(rowid, title, authors, tags, keywords, abstract, file_name, details)
+            VALUES (new.id, new.title, new.authors, new.tags, new.keywords, new.abstract, new.file_name, new.details);
         END
     ''')
 
     cursor.execute('''
         CREATE TRIGGER IF NOT EXISTS papers_ad AFTER DELETE ON papers BEGIN
-            INSERT INTO papers_fts(papers_fts, rowid, title, authors, tags, keywords, abstract, file_name)
-            VALUES ('delete', old.id, old.title, old.authors, old.tags, old.keywords, old.abstract, old.file_name);
+            INSERT INTO papers_fts(papers_fts, rowid, title, authors, tags, keywords, abstract, file_name, details)
+            VALUES ('delete', old.id, old.title, old.authors, old.tags, old.keywords, old.abstract, old.file_name, old.details);
         END
     ''')
 
     cursor.execute('''
         CREATE TRIGGER IF NOT EXISTS papers_au AFTER UPDATE ON papers BEGIN
-            INSERT INTO papers_fts(papers_fts, rowid, title, authors, tags, keywords, abstract, file_name)
-            VALUES ('delete', old.id, old.title, old.authors, old.tags, old.keywords, old.abstract, old.file_name);
-            INSERT INTO papers_fts(rowid, title, authors, tags, keywords, abstract, file_name)
-            VALUES (new.id, new.title, new.authors, new.tags, new.keywords, new.abstract, new.file_name);
+            INSERT INTO papers_fts(papers_fts, rowid, title, authors, tags, keywords, abstract, file_name, details)
+            VALUES ('delete', old.id, old.title, old.authors, old.tags, old.keywords, old.abstract, old.file_name, old.details);
+            INSERT INTO papers_fts(rowid, title, authors, tags, keywords, abstract, file_name, details)
+            VALUES (new.id, new.title, new.authors, new.tags, new.keywords, new.abstract, new.file_name, new.details);
         END
     ''')
 
@@ -102,25 +114,25 @@ def init_db():
 
 def add_paper(title: str, file_path: str, file_name: str, folder_path: str = '',
               authors: str = '', tags: str = '', keywords: str = '',
-              year: str = '', abstract: str = '') -> int:
+              year: str = '', abstract: str = '', details: str = '') -> int:
     """Add a paper to the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute('''
-            INSERT INTO papers (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract))
+            INSERT INTO papers (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details))
         conn.commit()
         return cursor.lastrowid
     except sqlite3.IntegrityError:
         # Paper already exists, update it
         cursor.execute('''
             UPDATE papers SET title=?, file_name=?, folder_path=?, authors=?, tags=?,
-                             keywords=?, year=?, abstract=?, updated_at=CURRENT_TIMESTAMP
+                             keywords=?, year=?, abstract=?, details=?, updated_at=CURRENT_TIMESTAMP
             WHERE file_path=?
-        ''', (title, file_name, folder_path, authors, tags, keywords, year, abstract, file_path))
+        ''', (title, file_name, folder_path, authors, tags, keywords, year, abstract, details, file_path))
         conn.commit()
         cursor.execute('SELECT id FROM papers WHERE file_path=?', (file_path,))
         return cursor.fetchone()['id']
@@ -133,7 +145,7 @@ def update_paper(paper_id: int, **kwargs) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    allowed_fields = ['title', 'authors', 'tags', 'keywords', 'year', 'abstract']
+    allowed_fields = ['title', 'authors', 'tags', 'keywords', 'year', 'abstract', 'details']
     updates = [(k, v) for k, v in kwargs.items() if k in allowed_fields]
 
     if not updates:

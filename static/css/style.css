@@ -103,12 +103,16 @@ button {
 .app-layout {
     display: flex;
     min-height: 100vh;
+    max-width: 1600px;
+    margin: 0 auto;
 }
 
 .main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
+    max-width: 100%;
+    overflow-x: hidden;
 }
 
 /* ============== Header ============== */
@@ -460,8 +464,10 @@ button {
 
 /* ============== Preview Panel ============== */
 .preview-panel {
-    width: 500px;
-    min-width: 400px;
+    width: 450px;
+    min-width: 350px;
+    max-width: 500px;
+    flex-shrink: 0;
     background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-lg);

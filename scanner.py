@@ -1,6 +1,6 @@
 """
 Paper scanner module for scanning directories and extracting metadata.
-Improved with advanced title/author extraction from PDF first page.
+Improved with garbage text detection and filename fallback for reliable display.
 """
 
 import os
@@ -47,28 +47,29 @@ SKIP_PATTERNS = [
     'results',
 ]
 
-# Common institutions/affiliations keywords
-AFFILIATION_KEYWORDS = [
-    'university', 'institute', 'college', 'school', 'department', 'center', 'centre',
-    'research', 'economics', 'business', 'faculty', 'nber', 'cepr', 'iza',
-    '大学', '学院', '研究所', '研究院', '中心', '系'
+# Garbage/invalid text patterns that indicate PDF extraction failed
+GARBAGE_PATTERNS = [
+    r'[\u0080-\u009f]',  # Control characters
+    r'[\u0530-\u058f]',  # Armenian (unlikely in paper titles)
+    r'[\u0d00-\u0d7f]',  # Malayalam
+    r'[\u0e80-\u0eff]',  # Lao
+    r'[\u1000-\u109f]',  # Myanmar
+    r'[\u1100-\u11ff]',  # Hangul Jamo (unlikely standalone)
+    r'[թԥൊ໾đၛᄝ]',  # Specific garbage chars seen in bad extractions
 ]
 
-# Common non-author patterns to filter out
-NON_AUTHOR_PATTERNS = [
-    r'^abstract$', r'^introduction$', r'^keywords?$', r'^jel\s*codes?$',
-    r'^\d+$', r'^volume\s+\d+', r'^issue\s+\d+', r'^pages?\s+\d+',
-    r'^doi:', r'^http', r'^www\.', r'@', r'\.edu$', r'\.org$',
-    r'^copyright', r'^all\s+rights', r'^\*', r'^†', r'^‡',
-]
-
-# Journal name patterns to detect first-page publisher info
-JOURNAL_PATTERNS = [
-    r'american\s+economic\s+review', r'quarterly\s+journal\s+of\s+economics',
-    r'econometrica', r'journal\s+of\s+political\s+economy', r'review\s+of\s+economic\s+studies',
-    r'journal\s+of\s+finance', r'journal\s+of\s+financial\s+economics',
-    r'jstor', r'wiley', r'elsevier', r'springer', r'oxford\s+university\s+press',
-    r'cambridge\s+university\s+press', r'nber\s+working\s+paper',
+# Chinese journal/volume patterns to filter out
+CHINESE_JOURNAL_PATTERNS = [
+    r'第\s*\d+\s*卷',
+    r'第\s*\d+\s*期',
+    r'\d{4}\s*年\s*\d+\s*月',
+    r'Vol\.\s*\d+',
+    r'No\.\s*\d+',
+    r'期刊',
+    r'学报',
+    r'经济研究',
+    r'经济学',
+    r'管理世界',
 ]
 
 
@@ -87,215 +88,186 @@ def should_skip_file(file_path: str) -> bool:
     return False
 
 
-def is_likely_author_name(text: str) -> bool:
-    """Check if text looks like an author name."""
-    text = text.strip()
-
-    if not text or len(text) < 3 or len(text) > 100:
-        return False
-
-    # Filter out obvious non-names
-    for pattern in NON_AUTHOR_PATTERNS:
-        if re.search(pattern, text, re.IGNORECASE):
-            return False
-
-    # Should contain mostly letters
-    letter_count = sum(1 for c in text if c.isalpha())
-    if letter_count < len(text) * 0.5:
-        return False
-
-    # Check for name-like patterns
-    # Western names: "John Smith", "J. Smith", "John D. Smith", "John Smith Jr."
-    # Chinese names: "张三", "Li Ming", "Lian Zhou"
-
-    # Has capitalized words (Western names)
-    if re.search(r'[A-Z][a-z]+', text):
+def is_garbage_text(text: str) -> bool:
+    """
+    Check if text contains garbage/garbled characters indicating PDF extraction failed.
+    This happens often with Chinese PDFs that use embedded fonts.
+    """
+    if not text or len(text) < 5:
         return True
 
-    # Has Chinese characters
-    if re.search(r'[\u4e00-\u9fff]', text):
+    # Count garbage characters
+    garbage_count = 0
+    for pattern in GARBAGE_PATTERNS:
+        garbage_count += len(re.findall(pattern, text))
+
+    # If more than 10% garbage, consider it bad
+    if garbage_count > len(text) * 0.1:
+        return True
+
+    # Count printable vs non-printable
+    printable = sum(1 for c in text if c.isprintable() or c.isspace())
+    if printable < len(text) * 0.7:
+        return True
+
+    # Count valid characters (Chinese + ASCII letters/numbers)
+    valid_chars = sum(1 for c in text if (
+        '\u4e00' <= c <= '\u9fff' or  # Chinese
+        c.isascii() and (c.isalnum() or c.isspace() or c in '.,;:!?-()[]{}"\'/') or
+        c in '，。；：！？、（）【】""''《》'
+    ))
+
+    if valid_chars < len(text) * 0.5:
         return True
 
     return False
 
 
-def extract_title_and_authors_from_text(text: str) -> Dict:
-    """
-    Extract title and authors from first page text using heuristics.
+def is_journal_header(text: str) -> bool:
+    """Check if text looks like a journal/volume header, not a title."""
+    text_lower = text.lower()
 
-    Strategy:
-    1. Split text into lines
-    2. First substantial lines (before abstract/affiliations) are likely title
-    3. Lines with name patterns after title are authors
-    4. Stop when we hit abstract, affiliations, or main content
+    # Chinese journal patterns
+    for pattern in CHINESE_JOURNAL_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return True
+
+    # Very short text with mostly numbers
+    if len(text) < 20:
+        digit_count = sum(1 for c in text if c.isdigit())
+        if digit_count > len(text) * 0.3:
+            return True
+
+    return False
+
+
+def clean_title_from_filename(filename: str) -> str:
+    """Extract a clean title from filename."""
+    name = os.path.splitext(filename)[0]
+
+    # Remove common prefixes like "[Journal Name]", "(2020)", etc.
+    name = re.sub(r'^\[.*?\]\s*', '', name)
+    name = re.sub(r'^\(.*?\)\s*', '', name)
+    name = re.sub(r'^\d+[-_.\s]+', '', name)
+
+    # Remove year patterns
+    name = re.sub(r'\s*[\(_]\s*(19|20)\d{2}\s*[\)_]?\s*', ' ', name)
+    name = re.sub(r'\s*(19|20)\d{2}\s*$', '', name)
+
+    # Replace underscores with spaces
+    name = re.sub(r'[_]+', ' ', name)
+
+    # Clean up multiple spaces
+    name = re.sub(r'\s+', ' ', name).strip()
+
+    # If name looks like "Author - Title", extract the title part
+    if ' - ' in name:
+        parts = name.split(' - ', 1)
+        if len(parts) == 2 and len(parts[1]) > 10:
+            name = parts[1]
+
+    return name
+
+
+def extract_authors_from_filename(filename: str) -> str:
+    """Try to extract author names from filename patterns."""
+    name = os.path.splitext(filename)[0]
+
+    # Common pattern: "Author1, Author2 - Title"
+    if ' - ' in name:
+        author_part = name.split(' - ')[0].strip()
+        # Check if it looks like authors
+        if re.match(r'^[A-Z][a-z]+', author_part):
+            return author_part
+
+    # Pattern: "Author (Year) Title"
+    match = re.match(r'^([A-Z][a-z]+(?:\s+(?:and|&|,)\s+[A-Z][a-z]+)*)\s*[\(_]', name)
+    if match:
+        return match.group(1)
+
+    # Pattern: "Author et al"
+    match = re.match(r'^([A-Z][a-z]+)\s+et\s+al', name)
+    if match:
+        return match.group(1) + ' et al.'
+
+    return ''
+
+
+def extract_metadata_from_text(text: str) -> Dict:
     """
-    result = {'title': '', 'authors': '', 'abstract': '', 'year': ''}
+    Extract metadata from first page text with simple, reliable heuristics.
+    Focuses on getting year and abstract only - title/authors come from filename.
+    The full first page text is stored in 'details' for searching.
+    """
+    result = {'title': '', 'authors': '', 'abstract': '', 'year': '', 'details': ''}
 
     if not text:
         return result
 
-    # Clean and split into lines
+    # Store first page text for searching (even if garbage - user might search for it)
+    clean_text = re.sub(r'\s+', ' ', text).strip()
+    result['details'] = clean_text[:2000]  # Limit to 2000 chars
+
+    # Check if text is garbage - if so, don't try to extract title
+    if is_garbage_text(text):
+        # Still try to extract year from the text
+        year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
+        if year_match:
+            year = year_match.group(1)
+            if 1950 <= int(year) <= 2030:
+                result['year'] = year
+        return result
+
+    # Split into lines
     lines = text.split('\n')
     lines = [line.strip() for line in lines]
-    lines = [line for line in lines if line]  # Remove empty lines
+    lines = [line for line in lines if line and len(line) > 3]
 
     if not lines:
         return result
 
-    # Skip publisher/journal header lines
-    start_idx = 0
-    for i, line in enumerate(lines[:10]):
-        line_lower = line.lower()
-        # Check if this is a publisher/journal header line
-        is_header = False
-        for pattern in JOURNAL_PATTERNS:
-            if re.search(pattern, line_lower):
-                is_header = True
-                break
-        # Also skip lines with volume/issue info
-        if re.search(r'vol\.\s*\d+|issue\s*\d+|pp?\.\s*\d+|doi:', line_lower):
-            is_header = True
-        # Skip very short lines at the start
-        if len(line) < 5:
-            is_header = True
-
-        if is_header:
-            start_idx = i + 1
-        else:
-            break
-
-    lines = lines[start_idx:]
-    if not lines:
-        return result
-
-    # Phase 1: Find title
-    # Title is usually the first substantial text, may span multiple lines
-    title_lines = []
-    title_end_idx = 0
-
-    for i, line in enumerate(lines):
-        line_lower = line.lower()
-
-        # Stop conditions for title
-        if any([
-            line_lower.startswith('abstract'),
-            line_lower.startswith('摘要'),
-            'jel classification' in line_lower,
-            'jel code' in line_lower,
-            'keywords' in line_lower,
-            '关键词' in line_lower,
-            re.search(r'^\d+\.\s+introduction', line_lower),
-            re.search(r'^1\s+introduction', line_lower),
-        ]):
-            break
-
-        # Check if this line looks like author names
-        if i > 0 and is_likely_author_name(line):
-            # Check if multiple comma-separated names
-            potential_names = [n.strip() for n in re.split(r'[,，、;；]', line) if n.strip()]
-            if len(potential_names) >= 2 or (len(potential_names) == 1 and is_likely_author_name(potential_names[0])):
-                # Likely author line, stop title collection
-                if title_lines:
-                    title_end_idx = i
-                    break
-
-        # Check if line looks like an affiliation
-        if any(keyword in line.lower() for keyword in AFFILIATION_KEYWORDS):
-            if title_lines:
-                title_end_idx = i
-                break
-
-        # Add to title if it looks like title text
-        if len(line) > 3:
-            # Title lines are usually not too long (not a paragraph)
-            if len(line) < 300:
-                title_lines.append(line)
-                title_end_idx = i + 1
-            else:
-                # Long line - might be abstract or content
-                break
-
-        # Don't let title be too long
-        if len(title_lines) >= 5:
-            break
-
-    # Build title
-    if title_lines:
-        result['title'] = ' '.join(title_lines)
-        # Clean up title
-        result['title'] = re.sub(r'\s+', ' ', result['title']).strip()
-        # Remove trailing punctuation that doesn't belong
-        result['title'] = re.sub(r'[*†‡]+$', '', result['title']).strip()
-
-    # Phase 2: Find authors
-    # Authors usually follow title, before abstract/affiliations
-    remaining_lines = lines[title_end_idx:]
-    author_candidates = []
-
-    for i, line in enumerate(remaining_lines[:15]):  # Check next 15 lines
-        line_lower = line.lower()
-
-        # Stop conditions
-        if any([
-            line_lower.startswith('abstract'),
-            line_lower.startswith('摘要'),
-            'jel classification' in line_lower,
-            'jel code' in line_lower,
-            len(line) > 500,  # Too long, probably content
-            re.search(r'^\d+\.\s+\w+', line_lower),  # Section number
-        ]):
-            break
-
-        # Skip affiliation lines (but don't stop)
-        if any(keyword in line.lower() for keyword in AFFILIATION_KEYWORDS):
+    # Try to find a good title - but be very conservative
+    for line in lines[:15]:  # Check first 15 lines
+        # Skip journal headers
+        if is_journal_header(line):
             continue
 
-        # Skip lines with email addresses
-        if '@' in line or re.search(r'^\*|^†|^‡', line):
+        # Skip very short or very long lines
+        if len(line) < 15 or len(line) > 150:
             continue
 
-        # Check if this looks like author names
-        # Split by common separators
-        potential_names = re.split(r'[,，、;；]|\s+and\s+|\s+&\s+', line)
-        potential_names = [n.strip() for n in potential_names if n.strip()]
+        # Skip lines that look like metadata
+        line_lower = line.lower()
+        skip_keywords = [
+            'abstract', '摘要', 'keywords', '关键词', 'jel',
+            'doi:', 'http', 'www.', '@', 'copyright',
+            'university', 'institute', 'college', 'department',
+            '大学', '学院', '研究所', '研究院', '中心'
+        ]
+        if any(keyword in line_lower for keyword in skip_keywords):
+            continue
 
-        # Check each potential name
-        valid_names = []
-        for name in potential_names:
-            # Clean up name
-            name = re.sub(r'[*†‡\d]+', '', name).strip()
-            name = re.sub(r'\s+', ' ', name)
+        # Skip lines with too many numbers
+        digit_ratio = sum(1 for c in line if c.isdigit()) / len(line)
+        if digit_ratio > 0.2:
+            continue
 
-            if is_likely_author_name(name) and len(name) > 2:
-                valid_names.append(name)
+        # This might be a title
+        result['title'] = line
+        break
 
-        if valid_names:
-            author_candidates.extend(valid_names)
-
-    # Deduplicate and join authors
-    seen = set()
-    unique_authors = []
-    for name in author_candidates:
-        name_lower = name.lower()
-        if name_lower not in seen and len(name) > 2:
-            seen.add(name_lower)
-            unique_authors.append(name)
-
-    if unique_authors:
-        result['authors'] = ', '.join(unique_authors[:10])  # Max 10 authors
-
-    # Phase 3: Find abstract
+    # Extract abstract
     abstract_match = re.search(
-        r'(?:abstract|摘要)[:\s]*\n*(.{50,1500}?)(?=\n\s*\n|introduction|1\.\s|keywords|关键词|jel)',
+        r'(?:abstract|摘要)[:\s]*\n*(.{50,1000}?)(?=\n\s*\n|introduction|1\.\s|keywords|关键词|jel)',
         text,
         re.IGNORECASE | re.DOTALL
     )
     if abstract_match:
         abstract = abstract_match.group(1).strip()
         abstract = re.sub(r'\s+', ' ', abstract)
-        result['abstract'] = abstract[:800]
+        result['abstract'] = abstract[:500]
 
-    # Phase 4: Find year
+    # Extract year
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
     if year_match:
         year = year_match.group(1)
@@ -321,46 +293,68 @@ def extract_pdf_first_page_text(file_path: str) -> str:
     return ''
 
 
-def extract_pdf_metadata_safe(file_path: str) -> Dict:
+def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
     """
-    Extract metadata from PDF using multiple strategies:
-    1. First page text analysis (most reliable)
-    2. PDF metadata (often incomplete/wrong)
-    3. Filename analysis (fallback)
+    Extract metadata from PDF using multiple strategies.
+    PRIORITY: Filename > PDF text (to avoid garbage display)
+
+    Strategy:
+    1. Filename analysis (most reliable for display)
+    2. First page text for abstract, year, and searchable details
+    3. PDF metadata as last resort
     """
     result = {
         'title': '',
         'authors': '',
         'year': '',
         'abstract': '',
+        'details': '',  # First page text for searching
     }
+
+    # Strategy 1: Extract from filename FIRST (most reliable for display)
+    filename_info = extract_info_from_filename(file_name)
+    result['title'] = filename_info.get('title', '')
+    result['authors'] = filename_info.get('authors', '')
+    result['year'] = filename_info.get('year', '')
 
     if not PDF_AVAILABLE:
         return result
 
     try:
-        # Strategy 1: Extract from first page text (most reliable)
+        # Strategy 2: Extract from first page text
         first_page_text = extract_pdf_first_page_text(file_path)
         if first_page_text:
-            text_info = extract_title_and_authors_from_text(first_page_text)
-            result['title'] = text_info.get('title', '')
-            result['authors'] = text_info.get('authors', '')
-            result['abstract'] = text_info.get('abstract', '')
-            result['year'] = text_info.get('year', '')
+            text_info = extract_metadata_from_text(first_page_text)
 
-        # Strategy 2: Fill in missing info from PDF metadata
+            # Store first page text for searching
+            result['details'] = text_info.get('details', '')
+
+            # Only use PDF text for title if filename didn't give us one AND text is not garbage
+            if not result['title'] and text_info.get('title'):
+                result['title'] = text_info['title']
+
+            # Get abstract from PDF text
+            if text_info.get('abstract'):
+                result['abstract'] = text_info['abstract']
+
+            # Get year from PDF text if not from filename
+            if not result['year'] and text_info.get('year'):
+                result['year'] = text_info['year']
+
+        # Strategy 3: Fill in missing info from PDF metadata
         try:
             reader = PdfReader(file_path, strict=False)
             if reader.metadata:
-                # Only use PDF metadata if we don't have data from text
+                # Only use PDF metadata if we still don't have data
                 if not result['title'] and reader.metadata.title:
                     title = str(reader.metadata.title).strip()
-                    if len(title) > 5 and title.lower() != 'untitled':
+                    # Only use if it looks valid
+                    if len(title) > 5 and title.lower() != 'untitled' and not is_garbage_text(title):
                         result['title'] = title
 
                 if not result['authors'] and reader.metadata.author:
                     author = str(reader.metadata.author).strip()
-                    if len(author) > 2 and 'latex' not in author.lower():
+                    if len(author) > 2 and 'latex' not in author.lower() and not is_garbage_text(author):
                         result['authors'] = author
 
                 if not result['year'] and reader.metadata.creation_date:
@@ -480,16 +474,17 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
         try:
             existing = db.get_paper_by_path(file_path)
 
-            # Extract metadata from PDF
-            pdf_meta = extract_pdf_metadata_safe(file_path)
+            # Extract metadata from PDF (now prioritizes filename for display)
+            pdf_meta = extract_pdf_metadata_safe(file_path, file)
 
-            # Extract info from filename as fallback
-            filename_info = extract_info_from_filename(file)
+            # Get title - use filename-based extraction if PDF gave garbage or nothing
+            title = pdf_meta['title'] or clean_title_from_filename(file) or file
 
-            # Combine - prefer PDF first page extraction
-            title = pdf_meta['title'] or filename_info['title'] or file
-            authors = pdf_meta['authors'] or filename_info['authors']
-            year = pdf_meta['year'] or filename_info['year']
+            # Get authors from filename (more reliable than PDF extraction)
+            authors = pdf_meta['authors'] or extract_authors_from_filename(file)
+
+            # Year from either source
+            year = pdf_meta['year']
 
             # Extract tags from folder structure
             tags = extract_tags_from_path(root, base_path)
@@ -504,6 +499,7 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
                 'keywords': '',
                 'year': year,
                 'abstract': pdf_meta['abstract'],
+                'details': pdf_meta.get('details', ''),  # First page text for searching
             }
 
             if existing:
@@ -518,6 +514,9 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
                     updates['abstract'] = pdf_meta['abstract']
                 if not existing['tags'] and tags:
                     updates['tags'] = ', '.join(tags)
+                # Always update details for searching
+                if pdf_meta.get('details'):
+                    updates['details'] = pdf_meta['details']
 
                 if updates:
                     db.update_paper(existing['id'], **updates)
@@ -541,21 +540,24 @@ def rescan_paper(paper_id: int) -> bool:
         return False
 
     file_path = paper['file_path']
+    file_name = paper['file_name']
     if not os.path.exists(file_path):
         return False
 
-    pdf_meta = extract_pdf_metadata_safe(file_path)
-    filename_info = extract_info_from_filename(paper['file_name'])
+    # Use the new extraction that prioritizes filename
+    pdf_meta = extract_pdf_metadata_safe(file_path, file_name)
 
     updates = {}
-    if pdf_meta['title'] or filename_info['title']:
-        updates['title'] = pdf_meta['title'] or filename_info['title']
-    if pdf_meta['authors'] or filename_info['authors']:
-        updates['authors'] = pdf_meta['authors'] or filename_info['authors']
+    if pdf_meta['title']:
+        updates['title'] = pdf_meta['title']
+    if pdf_meta['authors']:
+        updates['authors'] = pdf_meta['authors']
     if pdf_meta['abstract']:
         updates['abstract'] = pdf_meta['abstract']
-    if pdf_meta['year'] or filename_info['year']:
-        updates['year'] = pdf_meta['year'] or filename_info['year']
+    if pdf_meta['year']:
+        updates['year'] = pdf_meta['year']
+    if pdf_meta.get('details'):
+        updates['details'] = pdf_meta['details']
 
     if updates:
         return db.update_paper(paper_id, **updates)
