@@ -216,6 +216,26 @@ button {
     font-size: 1.2rem;
 }
 
+.search-btn {
+    position: absolute;
+    right: 50px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.search-btn:hover {
+    background: var(--primary-dark);
+}
+
 .search-clear {
     position: absolute;
     right: var(--spacing-md);
@@ -231,7 +251,7 @@ button {
     transition: opacity var(--transition-fast);
 }
 
-.search-input:not(:placeholder-shown) + .search-icon + .search-clear {
+.search-input:not(:placeholder-shown) + .search-icon + .search-btn + .search-clear {
     opacity: 1;
 }
 

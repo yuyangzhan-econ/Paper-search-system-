@@ -10,6 +10,7 @@ let searchTimeout = null;
 let suggestionIndex = -1;
 let allTags = [];
 let allAuthors = [];
+let isSearching = false;
 
 // Edit modal tag/author state
 let editAuthors = [];
@@ -41,7 +42,7 @@ async function initializeApp() {
 function setupEventListeners() {
     const searchInput = document.getElementById('searchInput');
 
-    // Search input events
+    // Search input events - only show suggestions, don't search
     searchInput.addEventListener('input', handleSearchInput);
     searchInput.addEventListener('keydown', handleSearchKeydown);
     searchInput.addEventListener('focus', () => {
@@ -129,15 +130,16 @@ function handleSearchInput(e) {
     // Clear previous timeout
     clearTimeout(searchTimeout);
 
-    // Show suggestions after short delay
+    // Only show suggestions, don't perform search
     if (query.length >= 1) {
         searchTimeout = setTimeout(() => {
             fetchSuggestions(query);
-            performSearch(query);
-        }, 200);
+        }, 150);
     } else {
         hideSuggestions();
+        // Show all papers when input is cleared
         renderPapers(papers);
+        hideSearchLoading();
     }
 }
 
@@ -163,8 +165,9 @@ function handleSearchKeydown(e) {
             if (suggestionIndex >= 0 && items[suggestionIndex]) {
                 selectSuggestion(items[suggestionIndex]);
             } else {
-                performSearch(e.target.value);
+                // Perform search on Enter
                 hideSuggestions();
+                performSearch(e.target.value);
             }
             break;
 
@@ -239,25 +242,60 @@ function hideSuggestions() {
     suggestionIndex = -1;
 }
 
+// Show/hide search loading indicator
+function showSearchLoading() {
+    const grid = document.getElementById('papersGrid');
+    grid.innerHTML = `
+        <div class="empty-state">
+            <div class="loading-spinner"></div>
+            <div class="empty-state-title" style="margin-top: 1rem;">正在搜索...</div>
+        </div>
+    `;
+    isSearching = true;
+}
+
+function hideSearchLoading() {
+    isSearching = false;
+}
+
+// Search button click handler (called from HTML)
+function triggerSearch() {
+    const query = document.getElementById('searchInput').value.trim();
+    hideSuggestions();
+    performSearch(query);
+}
+
 async function performSearch(query) {
+    if (isSearching) return;
+
     if (!query) {
         renderPapers(papers);
         return;
     }
 
+    showSearchLoading();
+
     try {
         const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await response.json();
-        renderPapers(data.results || []);
+        hideSearchLoading();
+
+        // Use requestAnimationFrame for smoother rendering
+        requestAnimationFrame(() => {
+            renderPapers(data.results || []);
+        });
     } catch (error) {
         console.error('Search failed:', error);
+        hideSearchLoading();
         showToast('搜索失败', 'error');
+        renderPapers([]);
     }
 }
 
 function clearSearch() {
     document.getElementById('searchInput').value = '';
     hideSuggestions();
+    hideSearchLoading();
     renderPapers(papers);
     currentPaper = null;
     hidePreview();
@@ -283,7 +321,8 @@ function renderPapers(papersToRender) {
         return;
     }
 
-    grid.innerHTML = papersToRender.map(paper => `
+    // Build HTML string in chunks for better performance
+    const html = papersToRender.map(paper => `
         <div class="paper-card ${currentPaper?.id === paper.id ? 'active' : ''}"
              data-id="${paper.id}"
              onclick="selectPaper(${paper.id})"
@@ -303,13 +342,12 @@ function renderPapers(papersToRender) {
             <div class="paper-folder">📂 ${escapeHtml(getShortPath(paper.folder_path))}</div>
         </div>
     `).join('');
+
+    grid.innerHTML = html;
 }
 
 // ============== Paper Actions ==============
 function selectPaper(paperId) {
-    const paper = papers.find(p => p.id === paperId) ||
-                  document.querySelector(`.paper-card[data-id="${paperId}"]`);
-
     // Fetch paper if not in local cache
     fetch(`/api/papers/${paperId}`)
         .then(res => res.json())
@@ -347,24 +385,56 @@ function showPreview(paper) {
         ${paper.year ? `<p><strong>年份：</strong>${paper.year}</p>` : ''}
         ${paper.tags ? `<p><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
         ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
-        <button class="btn btn-secondary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
-            📄 加载预览
-        </button>
     `;
 
-    // Show loading placeholder instead of auto-loading PDF (lazy load)
+    // Auto-load PDF preview with loading indicator
     pdf.innerHTML = `
-        <div class="preview-placeholder" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div class="preview-placeholder-icon">📄</div>
-            <p>点击上方"加载预览"查看PDF</p>
-            <p style="font-size:0.8rem;color:var(--text-muted);">或双击论文直接打开</p>
+        <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+            <div class="loading-spinner"></div>
+            <p style="margin-top: 1rem;">正在加载预览...</p>
+            <button class="btn btn-secondary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
+                🔄 重新加载
+            </button>
         </div>
     `;
+
+    // Load PDF with a slight delay to prevent UI blocking
+    setTimeout(() => {
+        loadPdfPreview(paper.id);
+    }, 100);
 }
 
 function loadPdfPreview(paperId) {
     const pdf = document.getElementById('previewPdf');
-    pdf.innerHTML = `<iframe src="/api/pdf/${paperId}#toolbar=0" title="PDF Preview" loading="lazy"></iframe>`;
+    const iframe = document.createElement('iframe');
+    iframe.src = `/api/pdf/${paperId}#toolbar=0`;
+    iframe.title = 'PDF Preview';
+    iframe.loading = 'lazy';
+
+    // Show loading until iframe loads
+    iframe.onload = () => {
+        const loading = document.getElementById('pdfLoading');
+        if (loading) loading.style.display = 'none';
+    };
+
+    iframe.onerror = () => {
+        pdf.innerHTML = `
+            <div class="preview-placeholder" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div class="preview-placeholder-icon">⚠️</div>
+                <p>预览加载失败</p>
+                <button class="btn btn-secondary btn-sm" onclick="loadPdfPreview(${paperId})" style="margin-top: 0.5rem;">
+                    🔄 重新加载
+                </button>
+            </div>
+        `;
+    };
+
+    // Clear existing content and add iframe
+    const existingIframe = pdf.querySelector('iframe');
+    if (existingIframe) {
+        existingIframe.remove();
+    }
+    pdf.appendChild(iframe);
 }
 
 function hidePreview() {

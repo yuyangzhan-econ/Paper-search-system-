@@ -1,7 +1,8 @@
 """
 Online journal search module for academic papers.
 Supports major economics, political science, and statistics journals.
-Uses OpenAlex, Semantic Scholar, CrossRef, and arXiv APIs.
+Based on Econ-Paper-Search project structure.
+Uses OpenAlex API for comprehensive coverage.
 """
 
 import re
@@ -9,255 +10,153 @@ import requests
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import time
-from urllib.parse import quote_plus, urljoin
+from urllib.parse import quote_plus
 
-
-# Journal configurations with OpenAlex source IDs
+# Complete journal database based on Econ-Paper-Search
 JOURNALS = {
-    # Economics Top 5
-    'aer': {
-        'name': 'American Economic Review',
-        'abbr': 'AER',
-        'category': 'Economics Top 5',
-        'issn': '0002-8282',
-    },
-    'qje': {
-        'name': 'Quarterly Journal of Economics',
-        'abbr': 'QJE',
-        'category': 'Economics Top 5',
-        'issn': '0033-5533',
-    },
-    'ecma': {
-        'name': 'Econometrica',
-        'abbr': 'ECMA',
-        'category': 'Economics Top 5',
-        'issn': '0012-9682',
-    },
-    'jpe': {
-        'name': 'Journal of Political Economy',
-        'abbr': 'JPE',
-        'category': 'Economics Top 5',
-        'issn': '0022-3808',
-    },
-    'res': {
-        'name': 'Review of Economic Studies',
-        'abbr': 'RES',
-        'category': 'Economics Top 5',
-        'issn': '0034-6527',
-    },
+    # ========== Economics Top 5 ==========
+    'aer': {'name': 'American Economic Review', 'abbr': 'AER', 'category': 'Top 5', 'issn': '0002-8282'},
+    'jpe': {'name': 'Journal of Political Economy', 'abbr': 'JPE', 'category': 'Top 5', 'issn': '0022-3808'},
+    'qje': {'name': 'Quarterly Journal of Economics', 'abbr': 'QJE', 'category': 'Top 5', 'issn': '0033-5533'},
+    'ecta': {'name': 'Econometrica', 'abbr': 'ECMA', 'category': 'Top 5', 'issn': '0012-9682'},
+    'restud': {'name': 'Review of Economic Studies', 'abbr': 'RES', 'category': 'Top 5', 'issn': '0034-6527'},
 
-    # Economics Near-Top
-    'ej': {
-        'name': 'Economic Journal',
-        'abbr': 'EJ',
-        'category': 'Economics Near-Top',
-        'issn': '0013-0133',
-    },
-    'jeea': {
-        'name': 'Journal of the European Economic Association',
-        'abbr': 'JEEA',
-        'category': 'Economics Near-Top',
-        'issn': '1542-4766',
-    },
-    'restat': {
-        'name': 'Review of Economics and Statistics',
-        'abbr': 'REStat',
-        'category': 'Economics Near-Top',
-        'issn': '0034-6535',
-    },
+    # ========== AEJ Series ==========
+    'aejmac': {'name': 'AEJ: Macroeconomics', 'abbr': 'AEJ:Macro', 'category': 'AEJ', 'issn': '1945-7707'},
+    'aejmic': {'name': 'AEJ: Microeconomics', 'abbr': 'AEJ:Micro', 'category': 'AEJ', 'issn': '1945-7669'},
+    'aejapp': {'name': 'AEJ: Applied Economics', 'abbr': 'AEJ:Applied', 'category': 'AEJ', 'issn': '1945-7782'},
+    'aejpol': {'name': 'AEJ: Economic Policy', 'abbr': 'AEJ:Policy', 'category': 'AEJ', 'issn': '1945-7731'},
+    'aeri': {'name': 'AER: Insights', 'abbr': 'AER:I', 'category': 'AEJ', 'issn': '2640-205X'},
 
-    # AEJ Series
-    'aej-applied': {
-        'name': 'AEJ: Applied Economics',
-        'abbr': 'AEJ:Applied',
-        'category': 'AEJ Series',
-        'issn': '1945-7782',
-    },
-    'aej-policy': {
-        'name': 'AEJ: Economic Policy',
-        'abbr': 'AEJ:Policy',
-        'category': 'AEJ Series',
-        'issn': '1945-7731',
-    },
-    'aej-macro': {
-        'name': 'AEJ: Macroeconomics',
-        'abbr': 'AEJ:Macro',
-        'category': 'AEJ Series',
-        'issn': '1945-7707',
-    },
-    'aej-micro': {
-        'name': 'AEJ: Microeconomics',
-        'abbr': 'AEJ:Micro',
-        'category': 'AEJ Series',
-        'issn': '1945-7669',
-    },
+    # ========== General Economics ==========
+    'restat': {'name': 'Review of Economics and Statistics', 'abbr': 'REStat', 'category': 'General', 'issn': '0034-6535'},
+    'jeea': {'name': 'Journal of the European Economic Association', 'abbr': 'JEEA', 'category': 'General', 'issn': '1542-4766'},
+    'eer': {'name': 'European Economic Review', 'abbr': 'EER', 'category': 'General', 'issn': '0014-2921'},
+    'ej': {'name': 'Economic Journal', 'abbr': 'EJ', 'category': 'General', 'issn': '0013-0133'},
+    'qe': {'name': 'Quantitative Economics', 'abbr': 'QE', 'category': 'General', 'issn': '1759-7323'},
+    'ier': {'name': 'International Economic Review', 'abbr': 'IER', 'category': 'General', 'issn': '0020-6598'},
 
-    # Top Field Journals
-    'jpube': {
-        'name': 'Journal of Public Economics',
-        'abbr': 'JPubE',
-        'category': 'Top Field',
-        'issn': '0047-2727',
-    },
-    'jde': {
-        'name': 'Journal of Development Economics',
-        'abbr': 'JDE',
-        'category': 'Top Field',
-        'issn': '0304-3878',
-    },
-    'jhe': {
-        'name': 'Journal of Health Economics',
-        'abbr': 'JHE',
-        'category': 'Top Field',
-        'issn': '0167-6296',
-    },
-    'jet': {
-        'name': 'Journal of Economic Theory',
-        'abbr': 'JET',
-        'category': 'Top Field',
-        'issn': '0022-0531',
-    },
-    'geb': {
-        'name': 'Games and Economic Behavior',
-        'abbr': 'GEB',
-        'category': 'Top Field',
-        'issn': '0899-8256',
-    },
-    'jue': {
-        'name': 'Journal of Urban Economics',
-        'abbr': 'JUE',
-        'category': 'Top Field',
-        'issn': '0094-1190',
-    },
-    'jeem': {
-        'name': 'Journal of Environmental Economics and Management',
-        'abbr': 'JEEM',
-        'category': 'Top Field',
-        'issn': '0095-0696',
-    },
-    'jole': {
-        'name': 'Journal of Labor Economics',
-        'abbr': 'JOLE',
-        'category': 'Top Field',
-        'issn': '0734-306X',
-    },
-    'et': {
-        'name': 'Economic Theory',
-        'abbr': 'ET',
-        'category': 'Top Field',
-        'issn': '0938-2259',
-    },
-    'eer': {
-        'name': 'European Economic Review',
-        'abbr': 'EER',
-        'category': 'Top Field',
-        'issn': '0014-2921',
-    },
-    'ier': {
-        'name': 'International Economic Review',
-        'abbr': 'IER',
-        'category': 'Top Field',
-        'issn': '0020-6598',
-    },
-    'jie': {
-        'name': 'Journal of International Economics',
-        'abbr': 'JIE',
-        'category': 'Top Field',
-        'issn': '0022-1996',
-    },
-    'joe': {
-        'name': 'Journal of Econometrics',
-        'abbr': 'JoE',
-        'category': 'Top Field',
-        'issn': '0304-4076',
-    },
-    'jf': {
-        'name': 'Journal of Finance',
-        'abbr': 'JF',
-        'category': 'Top Field',
-        'issn': '0022-1082',
-    },
-    'jfe': {
-        'name': 'Journal of Financial Economics',
-        'abbr': 'JFE',
-        'category': 'Top Field',
-        'issn': '0304-405X',
-    },
-    'rfs': {
-        'name': 'Review of Financial Studies',
-        'abbr': 'RFS',
-        'category': 'Top Field',
-        'issn': '0893-9454',
-    },
+    # ========== Survey/Review Journals ==========
+    'jep': {'name': 'Journal of Economic Perspectives', 'abbr': 'JEP', 'category': 'Survey', 'issn': '0895-3309'},
+    'jel': {'name': 'Journal of Economic Literature', 'abbr': 'JEL', 'category': 'Survey', 'issn': '0022-0515'},
+    'are': {'name': 'Annual Review of Economics', 'abbr': 'ARE', 'category': 'Survey', 'issn': '1941-1383'},
 
-    # Political Science Top 3
-    'ajps': {
-        'name': 'American Journal of Political Science',
-        'abbr': 'AJPS',
-        'category': 'Political Science Top 3',
-        'issn': '0092-5853',
-    },
-    'apsr': {
-        'name': 'American Political Science Review',
-        'abbr': 'APSR',
-        'category': 'Political Science Top 3',
-        'issn': '0003-0554',
-    },
-    'jop': {
-        'name': 'Journal of Politics',
-        'abbr': 'JOP',
-        'category': 'Political Science Top 3',
-        'issn': '0022-3816',
-    },
+    # ========== Field: Labor Economics ==========
+    'jole': {'name': 'Journal of Labor Economics', 'abbr': 'JOLE', 'category': 'Labor', 'issn': '0734-306X'},
+    'jhr': {'name': 'Journal of Human Resources', 'abbr': 'JHR', 'category': 'Labor', 'issn': '0022-166X'},
+    'le': {'name': 'Labour Economics', 'abbr': 'LE', 'category': 'Labor', 'issn': '0927-5371'},
 
-    # Statistics Top 3
-    'jasa': {
-        'name': 'Journal of the American Statistical Association',
-        'abbr': 'JASA',
-        'category': 'Statistics Top 3',
-        'issn': '0162-1459',
-    },
-    'jrssb': {
-        'name': 'Journal of the Royal Statistical Society: Series B',
-        'abbr': 'JRSS-B',
-        'category': 'Statistics Top 3',
-        'issn': '1369-7412',
-    },
-    'aos': {
-        'name': 'Annals of Statistics',
-        'abbr': 'AoS',
-        'category': 'Statistics Top 3',
-        'issn': '0090-5364',
-    },
+    # ========== Field: Development Economics ==========
+    'jde': {'name': 'Journal of Development Economics', 'abbr': 'JDE', 'category': 'Development', 'issn': '0304-3878'},
+    'wber': {'name': 'World Bank Economic Review', 'abbr': 'WBER', 'category': 'Development', 'issn': '0258-6770'},
+    'edcc': {'name': 'Economic Development and Cultural Change', 'abbr': 'EDCC', 'category': 'Development', 'issn': '0013-0079'},
+
+    # ========== Field: Public Economics ==========
+    'jpube': {'name': 'Journal of Public Economics', 'abbr': 'JPubE', 'category': 'Public', 'issn': '0047-2727'},
+    'jpope': {'name': 'Journal of Population Economics', 'abbr': 'JPopE', 'category': 'Public', 'issn': '0933-1433'},
+
+    # ========== Field: Health Economics ==========
+    'jhe': {'name': 'Journal of Health Economics', 'abbr': 'JHE', 'category': 'Health', 'issn': '0167-6296'},
+    'jhc': {'name': 'Journal of Human Capital', 'abbr': 'JHC', 'category': 'Health', 'issn': '1932-8575'},
+
+    # ========== Field: Urban/Regional ==========
+    'jue': {'name': 'Journal of Urban Economics', 'abbr': 'JUE', 'category': 'Urban', 'issn': '0094-1190'},
+    'rsue': {'name': 'Regional Science and Urban Economics', 'abbr': 'RSUE', 'category': 'Urban', 'issn': '0166-0462'},
+
+    # ========== Field: Environmental ==========
+    'jeem': {'name': 'Journal of Environmental Economics and Management', 'abbr': 'JEEM', 'category': 'Environment', 'issn': '0095-0696'},
+    'jaere': {'name': 'Journal of the Association of Environmental and Resource Economists', 'abbr': 'JAERE', 'category': 'Environment', 'issn': '2333-5955'},
+
+    # ========== Field: Theory/Micro ==========
+    'jet': {'name': 'Journal of Economic Theory', 'abbr': 'JET', 'category': 'Theory', 'issn': '0022-0531'},
+    'geb': {'name': 'Games and Economic Behavior', 'abbr': 'GEB', 'category': 'Theory', 'issn': '0899-8256'},
+    'ectt': {'name': 'Economic Theory', 'abbr': 'ET', 'category': 'Theory', 'issn': '0938-2259'},
+
+    # ========== Field: Monetary/Macro ==========
+    'jme': {'name': 'Journal of Monetary Economics', 'abbr': 'JME', 'category': 'Macro', 'issn': '0304-3932'},
+    'jmcb': {'name': 'Journal of Money, Credit and Banking', 'abbr': 'JMCB', 'category': 'Macro', 'issn': '0022-2879'},
+    'jedc': {'name': 'Journal of Economic Dynamics and Control', 'abbr': 'JEDC', 'category': 'Macro', 'issn': '0165-1889'},
+    'imfer': {'name': 'IMF Economic Review', 'abbr': 'IMFER', 'category': 'Macro', 'issn': '2041-4161'},
+
+    # ========== Field: Finance ==========
+    'jf': {'name': 'Journal of Finance', 'abbr': 'JF', 'category': 'Finance', 'issn': '0022-1082'},
+    'jfe': {'name': 'Journal of Financial Economics', 'abbr': 'JFE', 'category': 'Finance', 'issn': '0304-405X'},
+    'rfs': {'name': 'Review of Financial Studies', 'abbr': 'RFS', 'category': 'Finance', 'issn': '0893-9454'},
+    'jbf': {'name': 'Journal of Banking & Finance', 'abbr': 'JBF', 'category': 'Finance', 'issn': '0378-4266'},
+
+    # ========== Field: International ==========
+    'jie': {'name': 'Journal of International Economics', 'abbr': 'JIE', 'category': 'International', 'issn': '0022-1996'},
+
+    # ========== Field: Econometrics ==========
+    'joe': {'name': 'Journal of Econometrics', 'abbr': 'JoE', 'category': 'Econometrics', 'issn': '0304-4076'},
+    'jae': {'name': 'Journal of Applied Econometrics', 'abbr': 'JAE', 'category': 'Econometrics', 'issn': '0883-7252'},
+    'jbes': {'name': 'Journal of Business & Economic Statistics', 'abbr': 'JBES', 'category': 'Econometrics', 'issn': '0735-0015'},
+
+    # ========== Field: Behavioral ==========
+    'jebo': {'name': 'Journal of Economic Behavior & Organization', 'abbr': 'JEBO', 'category': 'Behavioral', 'issn': '0167-2681'},
+    'ee': {'name': 'Experimental Economics', 'abbr': 'EE', 'category': 'Behavioral', 'issn': '1386-4157'},
+
+    # ========== Field: Industrial Organization ==========
+    'ijio': {'name': 'International Journal of Industrial Organization', 'abbr': 'IJIO', 'category': 'IO', 'issn': '0167-7187'},
+    'jleo': {'name': 'Journal of Law, Economics, and Organization', 'abbr': 'JLEO', 'category': 'IO', 'issn': '8756-6222'},
+
+    # ========== Political Science Top 3 ==========
+    'ajps': {'name': 'American Journal of Political Science', 'abbr': 'AJPS', 'category': 'PoliSci', 'issn': '0092-5853'},
+    'apsr': {'name': 'American Political Science Review', 'abbr': 'APSR', 'category': 'PoliSci', 'issn': '0003-0554'},
+    'jop': {'name': 'Journal of Politics', 'abbr': 'JOP', 'category': 'PoliSci', 'issn': '0022-3816'},
+
+    # ========== Statistics Top ==========
+    'jasa': {'name': 'Journal of the American Statistical Association', 'abbr': 'JASA', 'category': 'Stats', 'issn': '0162-1459'},
+    'jrssb': {'name': 'Journal of the Royal Statistical Society: Series B', 'abbr': 'JRSS-B', 'category': 'Stats', 'issn': '1369-7412'},
+    'aos': {'name': 'Annals of Statistics', 'abbr': 'AoS', 'category': 'Stats', 'issn': '0090-5364'},
 }
 
+# Category shortcuts for quick selection
+CATEGORY_SHORTCUTS = {
+    'top5': ['aer', 'jpe', 'qje', 'ecta', 'restud'],
+    'general': ['aer', 'jpe', 'qje', 'ecta', 'restud', 'aeri', 'restat', 'jeea', 'eer', 'ej', 'qe'],
+    'survey': ['jep', 'jel', 'are'],
+    'finance_top': ['jf', 'jfe', 'rfs'],
+    'polisci': ['ajps', 'apsr', 'jop'],
+    'stats': ['jasa', 'jrssb', 'aos'],
+}
 
-# User agent for requests
 HEADERS = {
     'User-Agent': 'PaperSearch/1.0 (mailto:research@example.com)',
     'Accept': 'application/json',
 }
 
 
-def search_openalex(query: str, limit: int = 25, filter_econ: bool = False) -> List[Dict]:
+def search_openalex(query: str, limit: int = 50, journals: List[str] = None, year_from: int = None, year_to: int = None) -> List[Dict]:
     """
-    Search papers using OpenAlex API (free, comprehensive).
-    OpenAlex is the successor to Microsoft Academic Graph.
+    Search papers using OpenAlex API.
     """
     base_url = 'https://api.openalex.org/works'
 
-    # Build filter for economics-related works
-    filters = [f'default.search:{query}']
-    if filter_econ:
-        # Filter by economics concept
-        filters.append('concepts.id:C162324750')  # Economics concept ID
+    # Build filters
+    filters = []
+
+    if journals:
+        issns = [JOURNALS[j]['issn'] for j in journals if j in JOURNALS and JOURNALS[j].get('issn')]
+        if issns:
+            filters.append(f"primary_location.source.issn:{'|'.join(issns)}")
+
+    if year_from and year_to:
+        filters.append(f"publication_year:{year_from}-{year_to}")
+    elif year_from:
+        filters.append(f"publication_year:>{year_from - 1}")
+    elif year_to:
+        filters.append(f"publication_year:<{year_to + 1}")
 
     params = {
         'search': query,
-        'per_page': limit,
+        'per_page': min(limit, 100),
         'sort': 'relevance_score:desc',
         'select': 'id,title,authorships,publication_year,primary_location,abstract_inverted_index,cited_by_count,doi,open_access',
     }
+
+    if filters:
+        params['filter'] = ','.join(filters)
 
     try:
         response = requests.get(base_url, params=params, headers=HEADERS, timeout=15)
@@ -268,7 +167,7 @@ def search_openalex(query: str, limit: int = 25, filter_econ: bool = False) -> L
         for work in data.get('results', []):
             # Extract authors
             authors = []
-            for authorship in work.get('authorships', [])[:5]:  # Limit to first 5 authors
+            for authorship in work.get('authorships', [])[:5]:
                 author = authorship.get('author', {})
                 name = author.get('display_name', '')
                 if name:
@@ -282,11 +181,10 @@ def search_openalex(query: str, limit: int = 25, filter_econ: bool = False) -> L
             source = location.get('source', {}) or {}
             venue = source.get('display_name', '')
 
-            # Reconstruct abstract from inverted index
+            # Reconstruct abstract
             abstract = ''
             abstract_inv = work.get('abstract_inverted_index', {})
             if abstract_inv:
-                # Reconstruct abstract
                 word_positions = []
                 for word, positions in abstract_inv.items():
                     for pos in positions:
@@ -294,11 +192,9 @@ def search_openalex(query: str, limit: int = 25, filter_econ: bool = False) -> L
                 word_positions.sort()
                 abstract = ' '.join(word for _, word in word_positions)[:500]
 
-            # Get URL
             doi = work.get('doi', '')
             url = doi if doi else work.get('id', '')
 
-            # Check for open access PDF
             pdf_url = None
             oa = work.get('open_access', {})
             if oa.get('is_oa') and oa.get('oa_url'):
@@ -324,17 +220,14 @@ def search_openalex(query: str, limit: int = 25, filter_econ: bool = False) -> L
         return []
 
 
-def search_econ_papers(query: str, limit: int = 25) -> List[Dict]:
-    """
-    Search specifically for economics papers using OpenAlex with economics filter.
-    """
-    return search_openalex(query, limit, filter_econ=True)
+def search_econ_papers(query: str, limit: int = 50, year_from: int = None, year_to: int = None) -> List[Dict]:
+    """Search economics papers (Top 5 + General journals)."""
+    journals = CATEGORY_SHORTCUTS['general']
+    return search_openalex(query, limit, journals, year_from, year_to)
 
 
 def search_semantic_scholar(query: str, limit: int = 20) -> List[Dict]:
-    """
-    Search papers using Semantic Scholar API (free, no auth required).
-    """
+    """Search papers using Semantic Scholar API."""
     base_url = 'https://api.semanticscholar.org/graph/v1/paper/search'
 
     params = {
@@ -376,9 +269,7 @@ def search_semantic_scholar(query: str, limit: int = 20) -> List[Dict]:
 
 
 def search_crossref(query: str, limit: int = 20) -> List[Dict]:
-    """
-    Search papers using CrossRef API (free, no auth required).
-    """
+    """Search papers using CrossRef API."""
     base_url = 'https://api.crossref.org/works'
 
     params = {
@@ -394,10 +285,8 @@ def search_crossref(query: str, limit: int = 20) -> List[Dict]:
 
         papers = []
         for item in data.get('message', {}).get('items', []):
-            # Extract title
             title = item.get('title', [''])[0] if item.get('title') else ''
 
-            # Extract authors
             authors = []
             for author in item.get('author', []):
                 name_parts = []
@@ -409,17 +298,14 @@ def search_crossref(query: str, limit: int = 20) -> List[Dict]:
                     authors.append(' '.join(name_parts))
             authors_str = ', '.join(authors)
 
-            # Extract year
             year = ''
             pub_date = item.get('published-print', item.get('published-online', {}))
             date_parts = pub_date.get('date-parts', [[]])
             if date_parts and date_parts[0]:
                 year = str(date_parts[0][0])
 
-            # Extract venue
             venue = item.get('container-title', [''])[0] if item.get('container-title') else ''
 
-            # DOI link
             doi = item.get('DOI', '')
             url = f"https://doi.org/{doi}" if doi else item.get('URL', '')
 
@@ -442,9 +328,7 @@ def search_crossref(query: str, limit: int = 20) -> List[Dict]:
 
 
 def search_arxiv(query: str, limit: int = 20) -> List[Dict]:
-    """
-    Search papers on arXiv.
-    """
+    """Search papers on arXiv."""
     base_url = 'http://export.arxiv.org/api/query'
 
     params = {
@@ -459,7 +343,6 @@ def search_arxiv(query: str, limit: int = 20) -> List[Dict]:
         response = requests.get(base_url, params=params, headers=HEADERS, timeout=10)
         response.raise_for_status()
 
-        # Parse XML response
         soup = BeautifulSoup(response.content, 'xml')
         entries = soup.find_all('entry')
 
@@ -481,7 +364,6 @@ def search_arxiv(query: str, limit: int = 20) -> List[Dict]:
             abstract = entry.find('summary')
             abstract = abstract.text.strip().replace('\n', ' ') if abstract else ''
 
-            # Get PDF link
             pdf_url = None
             for link in entry.find_all('link'):
                 if link.get('title') == 'pdf':
@@ -510,10 +392,7 @@ def search_arxiv(query: str, limit: int = 20) -> List[Dict]:
 
 
 def search_author(author_name: str, limit: int = 30) -> Dict:
-    """
-    Search for an author and their publications using OpenAlex.
-    """
-    # First, search for the author
+    """Search for an author and their publications."""
     author_url = 'https://api.openalex.org/authors'
     params = {
         'search': author_name,
@@ -530,7 +409,6 @@ def search_author(author_name: str, limit: int = 30) -> Dict:
 
         if data.get('results'):
             author = data['results'][0]
-            author_id = author.get('id', '').split('/')[-1]
 
             author_info = {
                 'name': author.get('display_name', ''),
@@ -539,7 +417,6 @@ def search_author(author_name: str, limit: int = 30) -> Dict:
                 'h_index': author.get('summary_stats', {}).get('h_index', 0),
             }
 
-            # Get author's papers
             works_url = 'https://api.openalex.org/works'
             works_params = {
                 'filter': f'author.id:{author.get("id")}',
@@ -582,104 +459,37 @@ def search_author(author_name: str, limit: int = 30) -> Dict:
     }
 
 
-def search_by_journal(query: str, journal_keys: Optional[List[str]] = None, limit: int = 25) -> List[Dict]:
-    """
-    Search papers filtered by specific journals using OpenAlex.
-    """
-    base_url = 'https://api.openalex.org/works'
-
-    # Build ISSN filter
-    issn_filter = None
-    if journal_keys:
-        issns = [JOURNALS[k].get('issn') for k in journal_keys if k in JOURNALS and JOURNALS[k].get('issn')]
-        if issns:
-            issn_filter = '|'.join(issns)
-
-    params = {
-        'search': query,
-        'per_page': limit,
-        'sort': 'relevance_score:desc',
-        'select': 'id,title,authorships,publication_year,primary_location,abstract_inverted_index,cited_by_count,doi,open_access',
-    }
-
-    if issn_filter:
-        params['filter'] = f'primary_location.source.issn:{issn_filter}'
-
-    try:
-        response = requests.get(base_url, params=params, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-
-        papers = []
-        for work in data.get('results', []):
-            # Extract authors
-            authors = []
-            for authorship in work.get('authorships', [])[:5]:
-                author = authorship.get('author', {})
-                name = author.get('display_name', '')
-                if name:
-                    authors.append(name)
-            authors_str = ', '.join(authors)
-
-            # Extract venue
-            location = work.get('primary_location', {}) or {}
-            source = location.get('source', {}) or {}
-            venue = source.get('display_name', '')
-
-            # Reconstruct abstract
-            abstract = ''
-            abstract_inv = work.get('abstract_inverted_index', {})
-            if abstract_inv:
-                word_positions = []
-                for word, positions in abstract_inv.items():
-                    for pos in positions:
-                        word_positions.append((pos, word))
-                word_positions.sort()
-                abstract = ' '.join(word for _, word in word_positions)[:500]
-
-            doi = work.get('doi', '')
-            url = doi if doi else work.get('id', '')
-
-            pdf_url = None
-            oa = work.get('open_access', {})
-            if oa.get('is_oa') and oa.get('oa_url'):
-                pdf_url = oa.get('oa_url')
-
-            papers.append({
-                'title': work.get('title', ''),
-                'authors': authors_str,
-                'year': str(work.get('publication_year', '')),
-                'abstract': abstract,
-                'venue': venue,
-                'url': url,
-                'doi': doi.replace('https://doi.org/', '') if doi else '',
-                'citations': work.get('cited_by_count', 0),
-                'pdf_url': pdf_url,
-                'source': 'OpenAlex',
-            })
-
-        return papers
-
-    except Exception as e:
-        print(f"Journal search error: {e}")
-        return []
+def search_by_journal(query: str, journal_keys: List[str], limit: int = 50, year_from: int = None, year_to: int = None) -> List[Dict]:
+    """Search papers filtered by specific journals."""
+    return search_openalex(query, limit, journal_keys, year_from, year_to)
 
 
-def search_all(query: str, limit: int = 25) -> List[Dict]:
+def search_all(query: str, limit: int = 50, source: str = 'all') -> List[Dict]:
     """
     Search across multiple sources and combine results.
-    Prioritizes OpenAlex for comprehensive coverage.
+    source can be: 'all', 'openalex', 'semantic_scholar', 'crossref', 'arxiv', 'econ'
     """
     results = []
 
-    # Primary search with OpenAlex (most comprehensive)
-    oa_results = search_openalex(query, limit=limit)
-    results.extend(oa_results)
+    if source == 'all' or source == 'openalex':
+        oa_results = search_openalex(query, limit=limit)
+        results.extend(oa_results)
 
-    # Add Semantic Scholar results
-    time.sleep(0.3)
-    ss_results = search_semantic_scholar(query, limit=min(limit, 15))
-    results.extend(ss_results)
+    if source == 'all' or source == 'semantic_scholar':
+        time.sleep(0.3)
+        ss_results = search_semantic_scholar(query, limit=min(limit, 20))
+        results.extend(ss_results)
+
+    if source == 'crossref':
+        cr_results = search_crossref(query, limit=limit)
+        results.extend(cr_results)
+
+    if source == 'arxiv':
+        ar_results = search_arxiv(query, limit=limit)
+        results.extend(ar_results)
+
+    if source == 'econ':
+        return search_econ_papers(query, limit=limit)
 
     # Deduplicate by title similarity
     seen_titles = set()
@@ -715,4 +525,24 @@ def get_journal_categories() -> Dict[str, List[Dict]]:
             'abbr': journal['abbr'],
         })
 
-    return categories
+    # Sort categories in a preferred order
+    order = ['Top 5', 'AEJ', 'General', 'Survey', 'Finance', 'Labor', 'Development',
+             'Public', 'Health', 'Urban', 'Environment', 'Theory', 'Macro', 'International',
+             'Econometrics', 'Behavioral', 'IO', 'PoliSci', 'Stats']
+
+    sorted_categories = {}
+    for cat in order:
+        if cat in categories:
+            sorted_categories[cat] = categories[cat]
+
+    # Add any remaining categories
+    for cat in categories:
+        if cat not in sorted_categories:
+            sorted_categories[cat] = categories[cat]
+
+    return sorted_categories
+
+
+def get_category_shortcuts() -> Dict[str, List[str]]:
+    """Get category shortcuts for quick selection."""
+    return CATEGORY_SHORTCUTS

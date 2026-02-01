@@ -37,11 +37,15 @@
                         <input type="text"
                                id="searchInput"
                                class="search-input"
-                               placeholder="搜索论文标题、作者、关键词..."
+                               placeholder="搜索论文标题、作者、关键词... (按回车搜索)"
                                autocomplete="off">
                         <span class="search-icon">🔍</span>
+                        <button class="search-btn" onclick="triggerSearch()" title="搜索">搜索</button>
                         <button class="search-clear" onclick="clearSearch()">✕</button>
                         <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
+                    </div>
+                    <div class="search-tips" style="text-align: center; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                        提示：使用 + 表示或，* 表示且。例如：周黎安 + Li'an Zhou
                     </div>
                     <div class="stats-bar">
                         <span class="stat-item">
