@@ -1,5 +1,6 @@
 @echo off
-chcp 65001 >nul
+chcp 65001 >nul 2>&1
+cd /d "%~dp0"
 setlocal EnableDelayedExpansion
 
 title Paper Search System - Installer / 论文检索系统 - 安装程序
@@ -27,8 +28,7 @@ if errorlevel 1 (
     echo IMPORTANT: During installation, check "Add Python to PATH"
     echo 重要提示：安装时请勾选 "Add Python to PATH"
     echo.
-    pause
-    exit /b 1
+    goto :end
 )
 
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
@@ -49,8 +49,7 @@ if exist "venv" (
     if errorlevel 1 (
         echo [ERROR] Failed to create virtual environment!
         echo         创建虚拟环境失败！
-        pause
-        exit /b 1
+        goto :end
     )
     echo       Virtual environment created successfully.
     echo       虚拟环境创建成功。
@@ -63,33 +62,51 @@ echo       安装依赖包（可能需要几分钟）...
 echo.
 
 call venv\Scripts\activate.bat
+if errorlevel 1 (
+    echo [ERROR] Failed to activate virtual environment!
+    echo         激活虚拟环境失败！
+    goto :end
+)
 
 :: Upgrade pip first
+echo       Upgrading pip...
+echo       升级 pip...
 python -m pip install --upgrade pip --quiet
 
 :: Install dependencies
-pip install -r requirements.txt --quiet
+echo       Installing packages from requirements.txt...
+echo       从 requirements.txt 安装包...
+pip install -r requirements.txt
 if errorlevel 1 (
+    echo.
     echo [ERROR] Failed to install dependencies!
     echo         安装依赖包失败！
     echo.
     echo Try running manually: pip install -r requirements.txt
     echo 尝试手动运行: pip install -r requirements.txt
-    pause
-    exit /b 1
+    goto :end
 )
 
+echo.
 echo       Dependencies installed successfully.
 echo       依赖包安装成功。
 echo.
 
-:: Create desktop shortcut
+:: Create desktop shortcut (optional, may fail)
 echo [4/4] Creating desktop shortcut...
 echo       创建桌面快捷方式...
 echo.
 
-:: Run the shortcut creation script
-python create_shortcut.py
+if exist "create_shortcut.py" (
+    python create_shortcut.py
+    if errorlevel 1 (
+        echo       Note: Desktop shortcut creation failed, but installation is complete.
+        echo       注意：桌面快捷方式创建失败，但安装已完成。
+    )
+) else (
+    echo       Shortcut script not found, skipping...
+    echo       快捷方式脚本未找到，跳过...
+)
 
 echo.
 echo ╔═══════════════════════════════════════════════════════════════╗
@@ -97,16 +114,23 @@ echo ║                  Installation Complete!                        ║
 echo ║                      安装完成！                                 ║
 echo ╠═══════════════════════════════════════════════════════════════╣
 echo ║                                                                 ║
-echo ║  You can now:                                                   ║
-echo ║  您现在可以:                                                     ║
+echo ║  How to run / 如何运行:                                         ║
 echo ║                                                                 ║
-echo ║  1. Double-click the desktop shortcut "Paper Search"           ║
-echo ║     双击桌面快捷方式 "Paper Search"                              ║
+echo ║  [Browser Mode / 浏览器模式]                                    ║
+echo ║    1. Double-click start.bat                                   ║
+echo ║       双击 start.bat                                            ║
+echo ║    2. Open http://localhost:5000 in browser                    ║
+echo ║       在浏览器打开 http://localhost:5000                         ║
 echo ║                                                                 ║
-echo ║  2. Or double-click "PaperSearch.bat" in this folder           ║
-echo ║     或双击本文件夹中的 "PaperSearch.bat"                          ║
+echo ║  [Window Mode / 窗口模式]                                       ║
+echo ║    Double-click PaperSearch.bat                                ║
+echo ║    双击 PaperSearch.bat                                         ║
 echo ║                                                                 ║
 echo ╚═══════════════════════════════════════════════════════════════╝
 echo.
 
-pause
+:end
+echo.
+echo Press any key to exit...
+echo 按任意键退出...
+pause >nul
