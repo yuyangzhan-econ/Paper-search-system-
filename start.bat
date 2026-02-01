@@ -1,11 +1,12 @@
 @echo off
-chcp 65001 >nul
-title Paper Search System - 论文检索系统
+cd /d "%~dp0"
 
-echo ╔═══════════════════════════════════════════════════════════╗
-echo ║                  Paper Search System                       ║
-echo ║                     论文检索系统                            ║
-echo ╚═══════════════════════════════════════════════════════════╝
+title Paper Search System - Browser Mode
+
+echo.
+echo ===============================================================
+echo                    Paper Search System
+echo ===============================================================
 echo.
 
 :: Check if Python is installed
@@ -34,8 +35,11 @@ if errorlevel 1 (
 
 echo.
 echo Starting server...
-echo Open browser: http://localhost:5000
-echo Press Ctrl+C to quit
+echo.
+echo ===============================================================
+echo   Open your browser and go to: http://localhost:5000
+echo   Press Ctrl+C to stop the server
+echo ===============================================================
 echo.
 
 python app.py
