@@ -124,18 +124,21 @@ async function loadTagsAndAuthors() {
 }
 
 // ============== Search ==============
+let suggestionTimeout = null;
+
 function handleSearchInput(e) {
     const query = e.target.value.trim();
 
-    // Clear previous timeout
+    // Clear previous timeouts
     clearTimeout(searchTimeout);
+    clearTimeout(suggestionTimeout);
 
-    // Only show suggestions, don't perform search
-    if (query.length >= 1) {
-        searchTimeout = setTimeout(() => {
+    // Only show suggestions after a longer delay to avoid freezing
+    if (query.length >= 2) {
+        suggestionTimeout = setTimeout(() => {
             fetchSuggestions(query);
-        }, 150);
-    } else {
+        }, 300);  // Increased delay for better performance
+    } else if (query.length === 0) {
         hideSuggestions();
         // Show all papers when input is cleared
         renderPapers(papers);
@@ -302,7 +305,14 @@ function clearSearch() {
 }
 
 // ============== Rendering ==============
+let renderTimeout = null;
+
 function renderPapers(papersToRender) {
+    // Cancel any pending render
+    if (renderTimeout) {
+        cancelAnimationFrame(renderTimeout);
+    }
+
     const grid = document.getElementById('papersGrid');
     const countEl = document.getElementById('resultsCount');
 
@@ -321,29 +331,47 @@ function renderPapers(papersToRender) {
         return;
     }
 
-    // Build HTML string in chunks for better performance
-    const html = papersToRender.map(paper => `
-        <div class="paper-card ${currentPaper?.id === paper.id ? 'active' : ''}"
-             data-id="${paper.id}"
-             onclick="selectPaper(${paper.id})"
-             ondblclick="openPaper(${paper.id})">
-            <div class="paper-title">${escapeHtml(paper.title)}</div>
-            ${paper.authors ? `<div class="paper-authors">👤 ${escapeHtml(paper.authors)}</div>` : ''}
-            <div class="paper-meta">
-                ${paper.year ? `<span class="paper-year">${paper.year}</span>` : ''}
-            </div>
-            ${paper.tags ? `
-                <div class="paper-tags">
-                    ${paper.tags.split(',').slice(0, 4).map(tag =>
-                        `<span class="tag">${escapeHtml(tag.trim())}</span>`
-                    ).join('')}
-                </div>
-            ` : ''}
-            <div class="paper-folder">📂 ${escapeHtml(getShortPath(paper.folder_path))}</div>
-        </div>
-    `).join('');
+    // Limit display to 200 papers for performance
+    const papersToShow = papersToRender.slice(0, 200);
 
-    grid.innerHTML = html;
+    // Use requestAnimationFrame for smoother rendering
+    renderTimeout = requestAnimationFrame(() => {
+        // Build HTML string
+        const html = papersToShow.map(paper => {
+            const shortDetails = paper.details ? paper.details.substring(0, 80) : '';
+            return `
+            <div class="paper-card ${currentPaper?.id === paper.id ? 'active' : ''}"
+                 data-id="${paper.id}"
+                 onclick="selectPaper(${paper.id})"
+                 ondblclick="openPaper(${paper.id})">
+                <div class="paper-title">${escapeHtml(paper.title)}</div>
+                ${paper.authors ? `<div class="paper-authors">👤 ${escapeHtml(paper.authors)}</div>` : ''}
+                <div class="paper-meta">
+                    ${paper.year ? `<span class="paper-year">${paper.year}</span>` : ''}
+                </div>
+                ${paper.tags ? `
+                    <div class="paper-tags">
+                        ${paper.tags.split(',').slice(0, 4).map(tag =>
+                            `<span class="tag">${escapeHtml(tag.trim())}</span>`
+                        ).join('')}
+                    </div>
+                ` : ''}
+                ${shortDetails ? `<div class="paper-details" style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 ${escapeHtml(shortDetails)}...</div>` : ''}
+                <div class="paper-folder">📂 ${escapeHtml(getShortPath(paper.folder_path))}</div>
+            </div>
+        `}).join('');
+
+        grid.innerHTML = html;
+
+        // Show notice if results were truncated
+        if (papersToRender.length > 200) {
+            grid.insertAdjacentHTML('beforeend', `
+                <div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.9rem;">
+                    显示前200条结果，共${papersToRender.length}条
+                </div>
+            `);
+        }
+    });
 }
 
 // ============== Paper Actions ==============
@@ -381,12 +409,22 @@ function showPreview(paper) {
     btnOpen.disabled = false;
     btnEdit.disabled = false;
 
-    // Render info
+    // Format details for display (truncate if too long)
+    const detailsText = paper.details ? paper.details.substring(0, 300) : '';
+    const hasMoreDetails = paper.details && paper.details.length > 300;
+
+    // Render info with details field
     info.innerHTML = `
         <h3>${escapeHtml(paper.title)}</h3>
         ${paper.authors ? `<p><strong>作者：</strong>${escapeHtml(paper.authors)}</p>` : ''}
         ${paper.year ? `<p><strong>年份：</strong>${paper.year}</p>` : ''}
         ${paper.tags ? `<p><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
+        ${detailsText ? `
+            <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.85rem;">
+                <strong>详情（首页内容）：</strong>
+                <span style="color: var(--text-muted);">${escapeHtml(detailsText)}${hasMoreDetails ? '...' : ''}</span>
+            </div>
+        ` : ''}
         ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
     `;
 

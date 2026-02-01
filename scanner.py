@@ -193,29 +193,142 @@ def extract_authors_from_filename(filename: str) -> str:
     return ''
 
 
+def has_too_many_digits(text: str) -> bool:
+    """Check if text has too many digits (likely not a valid title/author)."""
+    if not text or len(text) < 5:
+        return True
+    digit_count = sum(1 for c in text if c.isdigit())
+    return digit_count > len(text) * 0.15
+
+
+def is_likely_author_line(line: str) -> bool:
+    """Check if a line looks like it contains author names."""
+    line = line.strip()
+    if not line or len(line) < 3 or len(line) > 300:
+        return False
+
+    # Skip lines with too many digits
+    if has_too_many_digits(line):
+        return False
+
+    # Skip lines that look like affiliations or other metadata
+    skip_patterns = [
+        r'university|institute|college|department|school|center|centre',
+        r'大学|学院|研究所|研究院|中心|系',
+        r'abstract|摘要|keywords|关键词|jel|doi:|http|www\.|@',
+        r'copyright|rights|reserved|journal|volume|issue',
+        r'^\d+\.\s',  # Section numbers
+        r'introduction|conclusion|reference',
+    ]
+    line_lower = line.lower()
+    for pattern in skip_patterns:
+        if re.search(pattern, line_lower):
+            return False
+
+    # Good signs for author line:
+    # 1. Contains Chinese names (2-4 characters together)
+    chinese_name_pattern = r'[\u4e00-\u9fff]{2,4}'
+    # 2. Contains Western names (Capitalized words)
+    western_name_pattern = r'[A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z]?[a-z]*'
+    # 3. Contains common separators for multiple authors
+    has_separators = bool(re.search(r'[,，、;；]|\s+and\s+|\s+&\s+', line))
+
+    has_chinese_names = bool(re.search(chinese_name_pattern, line))
+    has_western_names = bool(re.search(western_name_pattern, line))
+
+    # Line is likely authors if it has names
+    if has_chinese_names or has_western_names:
+        # Extra validation: mostly letters and common punctuation
+        letter_count = sum(1 for c in line if c.isalpha() or '\u4e00' <= c <= '\u9fff')
+        if letter_count > len(line) * 0.5:
+            return True
+
+    return False
+
+
+def extract_authors_from_text(text: str) -> str:
+    """
+    Extract author names from first page text.
+    Authors usually appear in the first 20 lines, after title, before abstract.
+    """
+    if not text:
+        return ''
+
+    lines = text.split('\n')
+    lines = [line.strip() for line in lines]
+    lines = [line for line in lines if line and len(line) > 2]
+
+    if not lines:
+        return ''
+
+    author_candidates = []
+    found_title = False
+
+    for i, line in enumerate(lines[:25]):  # Check first 25 lines
+        line_lower = line.lower()
+
+        # Stop at abstract or keywords
+        if 'abstract' in line_lower or '摘要' in line_lower or 'keywords' in line_lower:
+            break
+
+        # Skip very long lines (likely paragraphs)
+        if len(line) > 200:
+            continue
+
+        # First substantial line is likely the title
+        if not found_title and len(line) > 15:
+            found_title = True
+            continue
+
+        # Check if this looks like an author line
+        if is_likely_author_line(line):
+            author_candidates.append(line)
+            # Usually authors are in 1-3 consecutive lines
+            if len(author_candidates) >= 3:
+                break
+
+    if not author_candidates:
+        return ''
+
+    # Combine and clean up author lines
+    combined = ' '.join(author_candidates)
+
+    # Remove superscripts, footnote markers, etc.
+    combined = re.sub(r'[*†‡§¶\d]+', '', combined)
+    combined = re.sub(r'\s+', ' ', combined).strip()
+
+    # Don't return if result is too short or has too many digits
+    if len(combined) < 3 or has_too_many_digits(combined):
+        return ''
+
+    return combined[:200]  # Limit length
+
+
 def extract_metadata_from_text(text: str) -> Dict:
     """
-    Extract metadata from first page text with simple, reliable heuristics.
-    Focuses on getting year and abstract only - title/authors come from filename.
-    The full first page text is stored in 'details' for searching.
+    Extract metadata from first page text.
+    Stores full first page text in 'details' for comprehensive searching.
+    Also attempts to extract title and authors from text.
     """
     result = {'title': '', 'authors': '', 'abstract': '', 'year': '', 'details': ''}
 
     if not text:
         return result
 
-    # Store first page text for searching (even if garbage - user might search for it)
+    # ALWAYS store first page text for searching (even if garbage)
+    # This ensures search never misses papers
     clean_text = re.sub(r'\s+', ' ', text).strip()
-    result['details'] = clean_text[:2000]  # Limit to 2000 chars
+    result['details'] = clean_text[:5000]  # Store up to 5000 chars for better search
 
-    # Check if text is garbage - if so, don't try to extract title
+    # Try to extract year regardless of text quality
+    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
+    if year_match:
+        year = year_match.group(1)
+        if 1950 <= int(year) <= 2030:
+            result['year'] = year
+
+    # Check if text is garbage - if so, skip title/author extraction
     if is_garbage_text(text):
-        # Still try to extract year from the text
-        year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
-        if year_match:
-            year = year_match.group(1)
-            if 1950 <= int(year) <= 2030:
-                result['year'] = year
         return result
 
     # Split into lines
@@ -226,14 +339,17 @@ def extract_metadata_from_text(text: str) -> Dict:
     if not lines:
         return result
 
-    # Try to find a good title - but be very conservative
-    for line in lines[:15]:  # Check first 15 lines
+    # Extract authors from text
+    result['authors'] = extract_authors_from_text(text)
+
+    # Try to find title (usually first substantial line)
+    for line in lines[:15]:
         # Skip journal headers
         if is_journal_header(line):
             continue
 
         # Skip very short or very long lines
-        if len(line) < 15 or len(line) > 150:
+        if len(line) < 10 or len(line) > 200:
             continue
 
         # Skip lines that look like metadata
@@ -248,8 +364,11 @@ def extract_metadata_from_text(text: str) -> Dict:
             continue
 
         # Skip lines with too many numbers
-        digit_ratio = sum(1 for c in line if c.isdigit()) / len(line)
-        if digit_ratio > 0.2:
+        if has_too_many_digits(line):
+            continue
+
+        # Skip if it looks like an author line (we already extracted authors)
+        if is_likely_author_line(line) and len(line) < 80:
             continue
 
         # This might be a title
@@ -258,7 +377,7 @@ def extract_metadata_from_text(text: str) -> Dict:
 
     # Extract abstract
     abstract_match = re.search(
-        r'(?:abstract|摘要)[:\s]*\n*(.{50,1000}?)(?=\n\s*\n|introduction|1\.\s|keywords|关键词|jel)',
+        r'(?:abstract|摘要)[:\s]*\n*(.{50,1500}?)(?=\n\s*\n|introduction|1\.\s|keywords|关键词|jel)',
         text,
         re.IGNORECASE | re.DOTALL
     )
@@ -266,13 +385,6 @@ def extract_metadata_from_text(text: str) -> Dict:
         abstract = abstract_match.group(1).strip()
         abstract = re.sub(r'\s+', ' ', abstract)
         result['abstract'] = abstract[:500]
-
-    # Extract year
-    year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
-    if year_match:
-        year = year_match.group(1)
-        if 1950 <= int(year) <= 2030:
-            result['year'] = year
 
     return result
 
@@ -296,11 +408,11 @@ def extract_pdf_first_page_text(file_path: str) -> str:
 def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
     """
     Extract metadata from PDF using multiple strategies.
-    PRIORITY: Filename > PDF text (to avoid garbage display)
+    Combines data from filename, PDF text, and PDF metadata.
 
     Strategy:
-    1. Filename analysis (most reliable for display)
-    2. First page text for abstract, year, and searchable details
+    1. Extract from first page text (for details, authors, title, abstract)
+    2. Supplement with filename info
     3. PDF metadata as last resort
     """
     result = {
@@ -308,53 +420,76 @@ def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
         'authors': '',
         'year': '',
         'abstract': '',
-        'details': '',  # First page text for searching
+        'details': '',  # First page text for searching - ALWAYS populate this
     }
 
-    # Strategy 1: Extract from filename FIRST (most reliable for display)
+    # Get filename info first
     filename_info = extract_info_from_filename(file_name)
-    result['title'] = filename_info.get('title', '')
-    result['authors'] = filename_info.get('authors', '')
-    result['year'] = filename_info.get('year', '')
 
     if not PDF_AVAILABLE:
+        result['title'] = filename_info.get('title', '') or clean_title_from_filename(file_name)
+        result['authors'] = filename_info.get('authors', '')
+        result['year'] = filename_info.get('year', '')
         return result
 
     try:
-        # Strategy 2: Extract from first page text
+        # Strategy 1: Extract from first page text (most important for searching)
         first_page_text = extract_pdf_first_page_text(file_path)
         if first_page_text:
             text_info = extract_metadata_from_text(first_page_text)
 
-            # Store first page text for searching
+            # ALWAYS store first page text for searching
             result['details'] = text_info.get('details', '')
 
-            # Only use PDF text for title if filename didn't give us one AND text is not garbage
-            if not result['title'] and text_info.get('title'):
-                result['title'] = text_info['title']
+            # Get authors from PDF text (often more complete than filename)
+            pdf_authors = text_info.get('authors', '')
+
+            # Get title from PDF text
+            pdf_title = text_info.get('title', '')
 
             # Get abstract from PDF text
-            if text_info.get('abstract'):
-                result['abstract'] = text_info['abstract']
+            result['abstract'] = text_info.get('abstract', '')
 
-            # Get year from PDF text if not from filename
-            if not result['year'] and text_info.get('year'):
-                result['year'] = text_info['year']
+            # Get year from PDF text
+            pdf_year = text_info.get('year', '')
 
-        # Strategy 3: Fill in missing info from PDF metadata
+            # Combine authors: prefer PDF text if valid, otherwise use filename
+            if pdf_authors and not has_too_many_digits(pdf_authors):
+                result['authors'] = pdf_authors
+            elif filename_info.get('authors'):
+                result['authors'] = filename_info['authors']
+
+            # For title: prefer filename (more reliable) unless it's just the raw filename
+            filename_title = filename_info.get('title', '')
+            if filename_title and filename_title != file_name and len(filename_title) > 5:
+                result['title'] = filename_title
+            elif pdf_title and not has_too_many_digits(pdf_title):
+                result['title'] = pdf_title
+            else:
+                result['title'] = clean_title_from_filename(file_name)
+
+            # Year from either source
+            result['year'] = filename_info.get('year', '') or pdf_year
+
+        else:
+            # No PDF text extracted, use filename info
+            result['title'] = filename_info.get('title', '') or clean_title_from_filename(file_name)
+            result['authors'] = filename_info.get('authors', '')
+            result['year'] = filename_info.get('year', '')
+
+        # Strategy 2: Fill in missing info from PDF metadata
         try:
             reader = PdfReader(file_path, strict=False)
             if reader.metadata:
                 # Only use PDF metadata if we still don't have data
                 if not result['title'] and reader.metadata.title:
                     title = str(reader.metadata.title).strip()
-                    # Only use if it looks valid
-                    if len(title) > 5 and title.lower() != 'untitled' and not is_garbage_text(title):
+                    if len(title) > 5 and title.lower() != 'untitled' and not is_garbage_text(title) and not has_too_many_digits(title):
                         result['title'] = title
 
                 if not result['authors'] and reader.metadata.author:
                     author = str(reader.metadata.author).strip()
-                    if len(author) > 2 and 'latex' not in author.lower() and not is_garbage_text(author):
+                    if len(author) > 2 and 'latex' not in author.lower() and not is_garbage_text(author) and not has_too_many_digits(author):
                         result['authors'] = author
 
                 if not result['year'] and reader.metadata.creation_date:
@@ -369,6 +504,12 @@ def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
 
     except Exception:
         pass
+
+    # Final validation: ensure title/authors don't have too many digits
+    if has_too_many_digits(result['title']):
+        result['title'] = clean_title_from_filename(file_name)
+    if has_too_many_digits(result['authors']):
+        result['authors'] = ''
 
     return result
 

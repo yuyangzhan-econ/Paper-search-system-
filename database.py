@@ -203,42 +203,67 @@ def get_all_papers() -> List[Dict]:
     return [dict(row) for row in rows]
 
 
-def search_papers_fts(query: str, limit: int = 50) -> List[Dict]:
-    """Full-text search using FTS5."""
+def search_papers_fts(query: str, limit: int = 100) -> List[Dict]:
+    """Full-text search using FTS5 - searches all indexed fields including details."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     # Escape special FTS characters
-    escaped_query = query.replace('"', '""')
+    escaped_query = query.replace('"', '""').replace("'", "''")
 
-    cursor.execute('''
-        SELECT p.*, bm25(papers_fts) as score
-        FROM papers p
-        JOIN papers_fts ON p.id = papers_fts.rowid
-        WHERE papers_fts MATCH ?
-        ORDER BY score
-        LIMIT ?
-    ''', (f'"{escaped_query}"*', limit))
+    try:
+        # Try prefix matching first (more flexible)
+        cursor.execute('''
+            SELECT p.*, bm25(papers_fts) as score
+            FROM papers p
+            JOIN papers_fts ON p.id = papers_fts.rowid
+            WHERE papers_fts MATCH ?
+            ORDER BY score
+            LIMIT ?
+        ''', (f'{escaped_query}*', limit))
 
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+        rows = cursor.fetchall()
+        if rows:
+            conn.close()
+            return [dict(row) for row in rows]
+    except:
+        pass
+
+    # Fallback to phrase search
+    try:
+        cursor.execute('''
+            SELECT p.*, bm25(papers_fts) as score
+            FROM papers p
+            JOIN papers_fts ON p.id = papers_fts.rowid
+            WHERE papers_fts MATCH ?
+            ORDER BY score
+            LIMIT ?
+        ''', (f'"{escaped_query}"', limit))
+
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    except:
+        conn.close()
+        return []
 
 
-def search_papers_like(query: str, limit: int = 50) -> List[Dict]:
-    """Fallback LIKE search for fuzzy matching."""
+def search_papers_like(query: str, limit: int = 100) -> List[Dict]:
+    """Fallback LIKE search for fuzzy matching - includes all searchable fields."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     search_pattern = f'%{query}%'
 
+    # Search in ALL fields including details and abstract
     cursor.execute('''
         SELECT * FROM papers
         WHERE title LIKE ? OR authors LIKE ? OR tags LIKE ?
-              OR keywords LIKE ? OR file_name LIKE ?
+              OR keywords LIKE ? OR file_name LIKE ? OR abstract LIKE ? OR details LIKE ?
         ORDER BY updated_at DESC
         LIMIT ?
-    ''', (search_pattern, search_pattern, search_pattern, search_pattern, search_pattern, limit))
+    ''', (search_pattern, search_pattern, search_pattern, search_pattern,
+          search_pattern, search_pattern, search_pattern, limit))
 
     rows = cursor.fetchall()
     conn.close()

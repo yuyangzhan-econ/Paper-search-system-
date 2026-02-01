@@ -263,6 +263,7 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
     keywords = paper.get('keywords', '').lower()
     filename = paper.get('file_name', '').lower()
     abstract = paper.get('abstract', '').lower()
+    details = paper.get('details', '').lower()  # First page content
 
     # Title match (highest weight)
     if query_lower in title:
@@ -275,7 +276,7 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
         else:
             score += 8.0
 
-    # Author match
+    # Author match (check both authors field AND details for author names)
     author_match, author_score = match_author(query, authors)
     if author_match:
         score += 12.0 * author_score
@@ -298,6 +299,13 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
             score += 4.0
         else:
             score += 2.0
+
+    # Details (first page content) match - CRITICAL for finding papers by any content
+    if details and query_lower in details:
+        if re.search(r'\b' + re.escape(query_lower) + r'\b', details):
+            score += 5.0  # Higher weight for exact word match
+        else:
+            score += 3.0  # Partial match still counts
 
     # Filename match (low priority)
     if query_lower in filename:
