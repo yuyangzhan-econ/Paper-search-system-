@@ -17,6 +17,9 @@ let editAuthors = [];
 let editTags = [];
 let editKeywords = [];
 
+// Settings
+let autoPreview = localStorage.getItem('autoPreview') !== 'false'; // Default true
+
 // ============== Initialization ==============
 document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
@@ -428,16 +431,29 @@ function showPreview(paper) {
         ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
     `;
 
-    // Show load button instead of auto-loading (faster response)
-    pdf.innerHTML = `
-        <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-            <div class="preview-placeholder-icon">📄</div>
-            <p>点击加载PDF预览</p>
-            <button class="btn btn-primary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
-                📄 加载预览
-            </button>
-        </div>
-    `;
+    // Check auto-preview setting
+    if (autoPreview) {
+        // Auto-load PDF preview
+        pdf.innerHTML = `
+            <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div class="loading-spinner"></div>
+                <p style="margin-top: 1rem;">正在加载预览...</p>
+            </div>
+        `;
+        // Slight delay to not block UI
+        setTimeout(() => loadPdfPreview(paper.id), 50);
+    } else {
+        // Show load button (manual mode)
+        pdf.innerHTML = `
+            <div class="preview-placeholder" id="pdfLoading" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div class="preview-placeholder-icon">📄</div>
+                <p>点击加载PDF预览</p>
+                <button class="btn btn-primary btn-sm" onclick="loadPdfPreview(${paper.id})" style="margin-top: 0.5rem;">
+                    📄 加载预览
+                </button>
+            </div>
+        `;
+    }
 }
 
 function loadPdfPreview(paperId) {
@@ -836,10 +852,19 @@ async function cleanupPapers() {
 // ============== Settings ==============
 function openSettings() {
     document.getElementById('settingsModal').classList.add('active');
+    // Sync auto-preview checkbox
+    const checkbox = document.getElementById('settingsAutoPreview');
+    if (checkbox) checkbox.checked = autoPreview;
 }
 
 function closeSettings() {
     document.getElementById('settingsModal').classList.remove('active');
+}
+
+function toggleAutoPreview() {
+    const checkbox = document.getElementById('settingsAutoPreview');
+    autoPreview = checkbox.checked;
+    localStorage.setItem('autoPreview', autoPreview);
 }
 
 async function saveSettings() {

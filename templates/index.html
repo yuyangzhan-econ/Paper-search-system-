@@ -191,6 +191,16 @@
                         </p>
                     </div>
                     <div class="settings-section">
+                        <h3 class="settings-title">预览设置</h3>
+                        <div class="form-group" style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                            <input type="checkbox" id="settingsAutoPreview" onchange="toggleAutoPreview()" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            <label for="settingsAutoPreview" style="cursor: pointer;">自动加载PDF预览</label>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--spacing-md);">
+                            关闭后，点击论文时需手动点击"加载预览"按钮才能显示PDF。
+                        </p>
+                    </div>
+                    <div class="settings-section">
                         <h3 class="settings-title">数据管理</h3>
                         <div style="display: flex; gap: var(--spacing-sm);">
                             <button class="btn btn-secondary" onclick="verifyPapers()">

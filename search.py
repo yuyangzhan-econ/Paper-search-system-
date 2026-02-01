@@ -248,14 +248,18 @@ def match_tag(query: str, tag_string: str) -> Tuple[bool, float]:
     return best_score >= 0.4, best_score
 
 
-def calculate_relevance_score(paper: Dict, query: str) -> float:
-    """Calculate relevance score for a paper given a query."""
+def calculate_relevance_score(paper: Dict, query: str) -> Tuple[float, int]:
+    """
+    Calculate relevance score for a paper given a query.
+    Returns (score, position) where position is the earliest position of query in details.
+    """
     score = 0.0
+    position = 999999  # Default high position for papers without match in details
     query_lower = query.lower().strip()
 
     # Empty query returns all
     if not query_lower:
-        return 1.0
+        return 1.0, 0
 
     title = paper.get('title', '').lower()
     authors = paper.get('authors', '')
@@ -302,6 +306,16 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
 
     # Details (first page content) match - CRITICAL for finding papers by any content
     if details and query_lower in details:
+        # Find position (excluding leading spaces)
+        details_stripped = details.lstrip()
+        pos = details_stripped.find(query_lower)
+        if pos >= 0:
+            position = pos
+            # Position-based bonus: earlier position = higher score
+            # Max bonus of 10 for position 0, decreasing as position increases
+            position_bonus = max(0, 10.0 - (pos / 100.0))
+            score += position_bonus
+
         if re.search(r'\b' + re.escape(query_lower) + r'\b', details):
             score += 5.0  # Higher weight for exact word match
         else:
@@ -311,7 +325,7 @@ def calculate_relevance_score(paper: Dict, query: str) -> float:
     if query_lower in filename:
         score += 1.0
 
-    return score
+    return score, position
 
 
 def parse_advanced_query(query: str) -> dict:
@@ -357,22 +371,28 @@ def parse_advanced_query(query: str) -> dict:
     return {'type': 'term', 'value': query}
 
 
-def evaluate_query(paper: Dict, parsed_query: dict) -> float:
-    """Evaluate a parsed query against a paper."""
+def evaluate_query(paper: Dict, parsed_query: dict) -> Tuple[float, int]:
+    """Evaluate a parsed query against a paper. Returns (score, position)."""
     if parsed_query['type'] == 'term':
         return calculate_relevance_score(paper, parsed_query['value'])
     elif parsed_query['type'] == 'and':
         # All terms must match
-        scores = [evaluate_query(paper, term) for term in parsed_query['terms']]
+        results = [evaluate_query(paper, term) for term in parsed_query['terms']]
+        scores = [r[0] for r in results]
+        positions = [r[1] for r in results]
         if all(s > 0 for s in scores):
-            return sum(scores)
-        return 0.0
+            return sum(scores), min(positions)
+        return 0.0, 999999
     elif parsed_query['type'] == 'or':
         # Any term can match
-        scores = [evaluate_query(paper, term) for term in parsed_query['terms']]
-        return max(scores) if scores else 0.0
+        results = [evaluate_query(paper, term) for term in parsed_query['terms']]
+        if results:
+            # Return result with highest score
+            best = max(results, key=lambda x: x[0])
+            return best
+        return 0.0, 999999
 
-    return 0.0
+    return 0.0, 999999
 
 
 def search(query: str, limit: int = 100) -> List[Dict]:
@@ -408,21 +428,23 @@ def search(query: str, limit: int = 100) -> List[Dict]:
     if has_advanced:
         parsed = parse_advanced_query(query)
         for paper in all_papers:
-            score = evaluate_query(paper, parsed)
+            score, position = evaluate_query(paper, parsed)
             if score > 0:
                 paper_copy = dict(paper)
                 paper_copy['relevance_score'] = score
+                paper_copy['details_position'] = position
                 scored_papers.append(paper_copy)
     else:
         for paper in all_papers:
-            score = calculate_relevance_score(paper, query)
+            score, position = calculate_relevance_score(paper, query)
             if score > 0:
                 paper_copy = dict(paper)
                 paper_copy['relevance_score'] = score
+                paper_copy['details_position'] = position
                 scored_papers.append(paper_copy)
 
-    # Sort by score descending, then by title
-    scored_papers.sort(key=lambda p: (-p.get('relevance_score', 0), p.get('title', '').lower()))
+    # Sort by score descending, then by position in details ascending, then by title
+    scored_papers.sort(key=lambda p: (-p.get('relevance_score', 0), p.get('details_position', 999999), p.get('title', '').lower()))
 
     return scored_papers[:limit]
 
