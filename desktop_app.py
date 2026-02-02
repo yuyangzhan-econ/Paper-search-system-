@@ -2,7 +2,6 @@
 """
 Paper Search System - Desktop Application
 Runs as a native desktop window without requiring a browser.
-论文检索系统 - 桌面应用程序
 """
 
 import sys
@@ -10,9 +9,14 @@ import os
 import threading
 import time
 import socket
+import platform
 
 # Add current directory to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, APP_DIR)
+
+# Icon path
+ICON_PATH = os.path.join(APP_DIR, "icon.ico")
 
 
 def find_free_port():
@@ -49,6 +53,59 @@ def wait_for_server(port, timeout=30):
     return False
 
 
+def set_windows_icon(icon_path):
+    """Set taskbar icon on Windows using ctypes."""
+    if platform.system() != 'Windows':
+        return
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        # Constants
+        GCL_HICON = -14
+        GCL_HICONSM = -34
+        ICON_SMALL = 0
+        ICON_BIG = 1
+        WM_SETICON = 0x0080
+        IMAGE_ICON = 1
+        LR_LOADFROMFILE = 0x0010
+        LR_DEFAULTSIZE = 0x0040
+
+        # Load functions
+        user32 = ctypes.windll.user32
+        LoadImageW = user32.LoadImageW
+        LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                               ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        LoadImageW.restype = wintypes.HANDLE
+
+        # Load icon
+        hicon = LoadImageW(None, icon_path, IMAGE_ICON, 0, 0,
+                          LR_LOADFROMFILE | LR_DEFAULTSIZE)
+
+        if hicon:
+            # Find the window
+            def enum_windows_callback(hwnd, results):
+                if user32.IsWindowVisible(hwnd):
+                    length = user32.GetWindowTextLengthW(hwnd) + 1
+                    buf = ctypes.create_unicode_buffer(length)
+                    user32.GetWindowTextW(hwnd, buf, length)
+                    if 'Paper Search' in buf.value:
+                        results.append(hwnd)
+                return True
+
+            WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            results = []
+            user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
+
+            for hwnd in results:
+                user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
+                user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
+
+    except Exception as e:
+        print(f"Note: Could not set window icon: {e}")
+
+
 def main():
     """Main entry point for desktop application."""
     try:
@@ -70,23 +127,42 @@ def main():
 
     # Wait for server to start
     print("Starting Paper Search System...")
-    print("论文检索系统启动中...")
 
     if not wait_for_server(port):
         print("Error: Server failed to start")
         sys.exit(1)
 
+    # Prepare window parameters
+    window_params = {
+        'title': 'Paper Search',
+        'url': f'http://127.0.0.1:{port}/',
+        'width': 1400,
+        'height': 900,
+        'min_size': (1000, 700),
+        'resizable': True,
+        'text_select': True,
+        'confirm_close': False,
+    }
+
+    # Check if icon exists and pywebview version supports it
+    if os.path.exists(ICON_PATH):
+        try:
+            # Try to use icon parameter (pywebview >= 4.0)
+            window_params['icon'] = ICON_PATH
+        except Exception:
+            pass
+
     # Create native window
-    window = webview.create_window(
-        title='Paper Search - 论文检索系统',
-        url=f'http://127.0.0.1:{port}/',
-        width=1400,
-        height=900,
-        min_size=(1000, 700),
-        resizable=True,
-        text_select=True,
-        confirm_close=False,
-    )
+    window = webview.create_window(**window_params)
+
+    # Set icon after window creation (for older pywebview or as fallback)
+    def on_loaded():
+        if os.path.exists(ICON_PATH):
+            time.sleep(0.5)  # Wait for window to fully load
+            set_windows_icon(ICON_PATH)
+
+    if os.path.exists(ICON_PATH):
+        threading.Thread(target=on_loaded, daemon=True).start()
 
     # Start webview (this blocks until window is closed)
     webview.start(
