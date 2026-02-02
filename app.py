@@ -186,6 +186,63 @@ def api_delete_paper(paper_id):
     return jsonify({'success': success})
 
 
+@app.route('/api/papers/add-file', methods=['POST'])
+def api_add_file():
+    """
+    Add a single PDF file to the database (for drag-drop quick add).
+    Expects JSON with 'file_path' field.
+    """
+    data = request.get_json()
+    if not data or not data.get('file_path'):
+        return jsonify({'success': False, 'error': 'file_path is required'}), 400
+
+    file_path = data['file_path'].strip()
+
+    # Validate file exists
+    if not os.path.exists(file_path):
+        return jsonify({'success': False, 'error': f'File not found: {file_path}'}), 404
+
+    # Validate it's a PDF
+    if not file_path.lower().endswith('.pdf'):
+        return jsonify({'success': False, 'error': 'Only PDF files are supported'}), 400
+
+    # Scan the single file
+    paper = scanner.scan_single_file(file_path, PAPERS_DIR)
+
+    if paper:
+        return jsonify({
+            'success': True,
+            'paper': paper,
+            'message': 'Paper added successfully'
+        })
+    else:
+        return jsonify({'success': False, 'error': 'Failed to scan file'}), 500
+
+
+@app.route('/api/papers/<int:paper_id>/fetch-doi', methods=['POST'])
+def api_fetch_doi_metadata(paper_id):
+    """
+    Fetch metadata from CrossRef using paper's DOI.
+    Updates the paper in database with fetched metadata.
+    """
+    paper = scanner.fetch_doi_metadata(paper_id)
+
+    if paper:
+        return jsonify({
+            'success': True,
+            'paper': paper,
+            'message': 'Metadata fetched successfully'
+        })
+    else:
+        # Check if paper exists
+        existing = db.get_paper(paper_id)
+        if not existing:
+            return jsonify({'success': False, 'error': 'Paper not found'}), 404
+        if not existing.get('doi'):
+            return jsonify({'success': False, 'error': 'Paper has no DOI'}), 400
+        return jsonify({'success': False, 'error': 'Could not fetch metadata from CrossRef'}), 500
+
+
 @app.route('/api/papers/<int:paper_id>/open', methods=['POST'])
 def api_open_paper(paper_id):
     """Open paper with default application."""

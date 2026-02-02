@@ -1,6 +1,6 @@
 """
 Paper scanner module for scanning directories and extracting metadata.
-Improved with garbage text detection and filename fallback for reliable display.
+Improved with garbage text detection, filename fallback, and DOI extraction.
 """
 
 import os
@@ -12,6 +12,7 @@ from typing import List, Dict, Optional, Tuple
 warnings.filterwarnings('ignore')
 
 import database as db
+import doi_service
 
 # Try to import pypdf
 try:
@@ -308,9 +309,9 @@ def extract_metadata_from_text(text: str) -> Dict:
     """
     Extract metadata from first page text.
     Stores full first page text in 'details' for comprehensive searching.
-    Also attempts to extract title and authors from text.
+    Also attempts to extract title, authors, and DOI from text.
     """
-    result = {'title': '', 'authors': '', 'abstract': '', 'year': '', 'details': ''}
+    result = {'title': '', 'authors': '', 'abstract': '', 'year': '', 'details': '', 'doi': ''}
 
     if not text:
         return result
@@ -319,6 +320,11 @@ def extract_metadata_from_text(text: str) -> Dict:
     # This ensures search never misses papers
     clean_text = re.sub(r'\s+', ' ', text).strip()
     result['details'] = clean_text[:5000]  # Store up to 5000 chars for better search
+
+    # Extract DOI (fast local operation)
+    doi = doi_service.extract_doi_from_text(text)
+    if doi:
+        result['doi'] = doi
 
     # Try to extract year regardless of text quality
     year_match = re.search(r'\b(19\d{2}|20[0-2]\d)\b', text)
@@ -411,7 +417,7 @@ def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
     Combines data from filename, PDF text, and PDF metadata.
 
     Strategy:
-    1. Extract from first page text (for details, authors, title, abstract)
+    1. Extract from first page text (for details, authors, title, abstract, DOI)
     2. Supplement with filename info
     3. PDF metadata as last resort
     """
@@ -421,6 +427,7 @@ def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
         'year': '',
         'abstract': '',
         'details': '',  # First page text for searching - ALWAYS populate this
+        'doi': '',  # DOI for metadata lookup
     }
 
     # Get filename info first
@@ -440,6 +447,9 @@ def extract_pdf_metadata_safe(file_path: str, file_name: str) -> Dict:
 
             # ALWAYS store first page text for searching
             result['details'] = text_info.get('details', '')
+
+            # Get DOI from PDF text
+            result['doi'] = text_info.get('doi', '')
 
             # Get authors from PDF text (often more complete than filename)
             pdf_authors = text_info.get('authors', '')
@@ -641,6 +651,7 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
                 'year': year,
                 'abstract': pdf_meta['abstract'],
                 'details': pdf_meta.get('details', ''),  # First page text for searching
+                'doi': pdf_meta.get('doi', ''),  # DOI for metadata lookup
             }
 
             if existing:
@@ -658,6 +669,9 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
                 # Always update details for searching
                 if pdf_meta.get('details'):
                     updates['details'] = pdf_meta['details']
+                # Update DOI if not already set
+                if not existing.get('doi') and pdf_meta.get('doi'):
+                    updates['doi'] = pdf_meta['doi']
 
                 if updates:
                     db.update_paper(existing['id'], **updates)
@@ -724,3 +738,106 @@ def remove_missing_papers() -> int:
     for paper in missing:
         db.delete_paper(paper['id'])
     return len(missing)
+
+
+def scan_single_file(file_path: str, base_path: str = '') -> Optional[Dict]:
+    """
+    Scan a single PDF file and add it to the database.
+    Returns the paper dict if successful, None if failed.
+    This is used for quick add (drag-drop) functionality.
+    """
+    if not os.path.exists(file_path):
+        return None
+
+    if not file_path.lower().endswith('.pdf'):
+        return None
+
+    file_name = os.path.basename(file_path)
+    folder_path = os.path.dirname(file_path)
+
+    # Check if already in database
+    existing = db.get_paper_by_path(file_path)
+    if existing:
+        return existing
+
+    try:
+        # Extract metadata from PDF
+        pdf_meta = extract_pdf_metadata_safe(file_path, file_name)
+
+        # Get title
+        title = pdf_meta['title'] or clean_title_from_filename(file_name) or file_name
+
+        # Get authors
+        authors = pdf_meta['authors'] or extract_authors_from_filename(file_name)
+
+        # Get tags from folder structure
+        tags = extract_tags_from_path(folder_path, base_path) if base_path else []
+
+        paper_data = {
+            'title': title,
+            'file_path': file_path,
+            'file_name': file_name,
+            'folder_path': folder_path,
+            'authors': authors,
+            'tags': ', '.join(tags),
+            'keywords': '',
+            'year': pdf_meta['year'],
+            'abstract': pdf_meta['abstract'],
+            'details': pdf_meta.get('details', ''),
+            'doi': pdf_meta.get('doi', ''),
+        }
+
+        paper_id = db.add_paper(**paper_data)
+        return db.get_paper(paper_id)
+
+    except Exception as e:
+        print(f"Error scanning {file_path}: {e}")
+        return None
+
+
+def fetch_doi_metadata(paper_id: int) -> Optional[Dict]:
+    """
+    Fetch metadata from CrossRef using paper's DOI.
+    Updates the paper in database with fetched metadata.
+    Returns the updated paper dict.
+    """
+    paper = db.get_paper(paper_id)
+    if not paper:
+        return None
+
+    doi = paper.get('doi')
+    if not doi:
+        # Try to extract DOI from details
+        details = paper.get('details', '')
+        doi = doi_service.extract_doi_from_text(details)
+        if doi:
+            db.update_paper(paper_id, doi=doi)
+
+    if not doi:
+        return None
+
+    # Fetch metadata from CrossRef
+    metadata = doi_service.fetch_metadata_from_crossref(doi)
+    if not metadata:
+        return None
+
+    # Update paper with fetched metadata
+    updates = {}
+
+    # Only update if current value is empty or less informative
+    if metadata.get('title') and (not paper.get('title') or paper['title'] == paper['file_name']):
+        updates['title'] = metadata['title']
+
+    if metadata.get('authors') and not paper.get('authors'):
+        updates['authors'] = metadata['authors']
+
+    if metadata.get('year') and not paper.get('year'):
+        updates['year'] = metadata['year']
+
+    if metadata.get('journal'):
+        updates['journal'] = metadata['journal']
+
+    if updates:
+        db.update_paper(paper_id, **updates)
+
+    return db.get_paper(paper_id)

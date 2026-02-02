@@ -38,16 +38,19 @@ def init_db():
             year TEXT DEFAULT '',
             abstract TEXT DEFAULT '',
             details TEXT DEFAULT '',
+            doi TEXT DEFAULT '',
+            journal TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
 
-    # Add details column if it doesn't exist (for existing databases)
-    try:
-        cursor.execute('ALTER TABLE papers ADD COLUMN details TEXT DEFAULT ""')
-    except sqlite3.OperationalError:
-        pass  # Column already exists
+    # Add new columns if they don't exist (for existing databases)
+    for col_name in ['details', 'doi', 'journal']:
+        try:
+            cursor.execute(f'ALTER TABLE papers ADD COLUMN {col_name} TEXT DEFAULT ""')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
     # Full-text search virtual table (includes details for deep searching)
     cursor.execute('''
@@ -114,25 +117,26 @@ def init_db():
 
 def add_paper(title: str, file_path: str, file_name: str, folder_path: str = '',
               authors: str = '', tags: str = '', keywords: str = '',
-              year: str = '', abstract: str = '', details: str = '') -> int:
+              year: str = '', abstract: str = '', details: str = '',
+              doi: str = '', journal: str = '') -> int:
     """Add a paper to the database."""
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute('''
-            INSERT INTO papers (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details))
+            INSERT INTO papers (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details, doi, journal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (title, file_path, file_name, folder_path, authors, tags, keywords, year, abstract, details, doi, journal))
         conn.commit()
         return cursor.lastrowid
     except sqlite3.IntegrityError:
         # Paper already exists, update it
         cursor.execute('''
             UPDATE papers SET title=?, file_name=?, folder_path=?, authors=?, tags=?,
-                             keywords=?, year=?, abstract=?, details=?, updated_at=CURRENT_TIMESTAMP
+                             keywords=?, year=?, abstract=?, details=?, doi=?, journal=?, updated_at=CURRENT_TIMESTAMP
             WHERE file_path=?
-        ''', (title, file_name, folder_path, authors, tags, keywords, year, abstract, details, file_path))
+        ''', (title, file_name, folder_path, authors, tags, keywords, year, abstract, details, doi, journal, file_path))
         conn.commit()
         cursor.execute('SELECT id FROM papers WHERE file_path=?', (file_path,))
         return cursor.fetchone()['id']
@@ -145,7 +149,7 @@ def update_paper(paper_id: int, **kwargs) -> bool:
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    allowed_fields = ['title', 'authors', 'tags', 'keywords', 'year', 'abstract', 'details']
+    allowed_fields = ['title', 'authors', 'tags', 'keywords', 'year', 'abstract', 'details', 'doi', 'journal']
     updates = [(k, v) for k, v in kwargs.items() if k in allowed_fields]
 
     if not updates:

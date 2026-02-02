@@ -61,6 +61,21 @@
                 </div>
             </section>
 
+            <!-- Quick Add Drop Zone -->
+            <div class="quick-add-zone" id="quickAddZone">
+                <div class="drop-zone" id="dropZone">
+                    <div class="drop-zone-content">
+                        <span class="drop-icon">📥</span>
+                        <span class="drop-text">拖拽 PDF 文件到此处快速添加</span>
+                        <span class="drop-hint">或点击"添加文件"按钮选择文件</span>
+                    </div>
+                    <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="handleFileSelect(event)">
+                    <button class="btn btn-secondary btn-sm quick-add-btn" onclick="document.getElementById('fileInput').click()">
+                        📄 添加文件
+                    </button>
+                </div>
+            </div>
+
             <!-- Results Section -->
             <section class="results-section">
                 <div class="results-list">
@@ -69,6 +84,9 @@
                             搜索结果 (<span class="results-count" id="resultsCount">0</span>)
                         </span>
                         <div class="results-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="toggleQuickAdd()" title="快速添加论文">
+                                ➕ 快速添加
+                            </button>
                             <button class="btn btn-secondary btn-sm" onclick="scanPapers()">
                                 🔄 扫描文件夹
                             </button>
@@ -255,6 +273,93 @@
     </footer>
 
     <style>
+        /* Quick Add Zone */
+        .quick-add-zone {
+            display: none;
+            padding: 0 2rem;
+            margin-bottom: 1rem;
+        }
+        .quick-add-zone.active {
+            display: block;
+        }
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            background: var(--bg-secondary);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .drop-zone.drag-over {
+            border-color: var(--primary-color);
+            background: rgba(var(--primary-rgb), 0.05);
+            transform: scale(1.01);
+        }
+        .drop-zone-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .drop-icon {
+            font-size: 2rem;
+        }
+        .drop-text {
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .drop-hint {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .quick-add-btn {
+            margin-top: 0.75rem;
+        }
+        .drop-zone.processing {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        .drop-zone.processing .drop-text {
+            color: var(--primary-color);
+        }
+
+        /* DOI Badge */
+        .doi-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: rgba(var(--primary-rgb), 0.1);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--primary-color);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .doi-badge:hover {
+            background: rgba(var(--primary-rgb), 0.2);
+        }
+        .fetch-doi-btn {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .fetch-doi-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        .fetch-doi-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .app-footer {
             position: fixed;
             bottom: 12px;
@@ -324,7 +429,179 @@
                     document.getElementById('footerVersion').textContent = 'v' + data.version;
                 })
                 .catch(() => {});
+
+            // Setup drag-drop zone
+            setupDropZone();
         });
+
+        // Toggle quick add zone visibility
+        function toggleQuickAdd() {
+            const zone = document.getElementById('quickAddZone');
+            zone.classList.toggle('active');
+        }
+
+        // Setup drop zone event handlers
+        function setupDropZone() {
+            const dropZone = document.getElementById('dropZone');
+            if (!dropZone) return;
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            // Highlight drop zone
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
+            });
+
+            // Handle dropped files
+            dropZone.addEventListener('drop', handleDrop, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // Handle file drop
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            if (files.length === 0) return;
+
+            // Try to get file path (works in some environments like pywebview on Windows)
+            const file = files[0];
+
+            // Check if it's a PDF
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('Only PDF files are supported', 'error');
+                return;
+            }
+
+            // Try to get the file path (available in some Electron/pywebview environments)
+            let filePath = file.path || (file.webkitRelativePath ? file.webkitRelativePath : null);
+
+            if (filePath) {
+                addFileByPath(filePath);
+            } else {
+                // File path not available - show instructions
+                showToast('Please copy the PDF to your papers folder and scan, or use the file path input', 'info');
+                promptForFilePath(file.name);
+            }
+        }
+
+        // Handle file selection via input
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            const file = files[0];
+
+            // Check if it's a PDF
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showToast('Only PDF files are supported', 'error');
+                return;
+            }
+
+            // Try to get file path
+            let filePath = file.path || (file.webkitRelativePath ? file.webkitRelativePath : null);
+
+            if (filePath) {
+                addFileByPath(filePath);
+            } else {
+                // File path not available in browser mode - show path input dialog
+                promptForFilePath(file.name);
+            }
+
+            // Reset input
+            e.target.value = '';
+        }
+
+        // Prompt user to enter file path manually
+        function promptForFilePath(fileName) {
+            const path = prompt(
+                `Please enter the full file path for: ${fileName}\n\nExample: E:\\研究\\论文\\${fileName}`,
+                `E:\\研究\\${fileName}`
+            );
+
+            if (path && path.trim()) {
+                addFileByPath(path.trim());
+            }
+        }
+
+        // Add file by path
+        function addFileByPath(filePath) {
+            const dropZone = document.getElementById('dropZone');
+            const dropText = dropZone.querySelector('.drop-text');
+            const originalText = dropText.textContent;
+
+            dropZone.classList.add('processing');
+            dropText.textContent = 'Adding paper...';
+
+            fetch('/api/papers/add-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_path: filePath })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(`Added: ${data.paper.title || data.paper.file_name}`, 'success');
+                    // Refresh stats and search results
+                    loadStats();
+                    if (document.getElementById('searchInput').value) {
+                        triggerSearch();
+                    }
+                    // Auto-fetch DOI metadata if paper has DOI
+                    if (data.paper.doi) {
+                        fetchDoiMetadata(data.paper.id);
+                    }
+                } else {
+                    showToast(data.error || 'Failed to add paper', 'error');
+                }
+            })
+            .catch(err => {
+                console.error('Error adding file:', err);
+                showToast('Error adding file', 'error');
+            })
+            .finally(() => {
+                dropZone.classList.remove('processing');
+                dropText.textContent = originalText;
+            });
+        }
+
+        // Fetch DOI metadata for a paper
+        function fetchDoiMetadata(paperId) {
+            return fetch(`/api/papers/${paperId}/fetch-doi`, {
+                method: 'POST'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('Metadata updated from DOI', 'success');
+                    // Refresh display
+                    if (document.getElementById('searchInput').value) {
+                        triggerSearch();
+                    }
+                    // Update preview if this paper is selected
+                    if (window.currentPaperId === paperId) {
+                        selectPaper(paperId);
+                    }
+                    return data.paper;
+                }
+                return null;
+            })
+            .catch(err => {
+                console.error('Error fetching DOI metadata:', err);
+                return null;
+            });
+        }
+
     </script>
 </body>
 </html>

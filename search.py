@@ -252,6 +252,17 @@ def calculate_relevance_score(paper: Dict, query: str) -> Tuple[float, int]:
     """
     Calculate relevance score for a paper given a query.
     Returns (score, position) where position is the earliest position of query in details.
+
+    Scoring priority (highest to lowest):
+    1. Title match (20-25 points)
+    2. Author match (15 points)
+    3. Journal match (12 points)
+    4. Year match (10 points)
+    5. Tag match (8 points)
+    6. Keyword match (6 points)
+    7. Abstract match (4 points)
+    8. Details/first page match (2-3 points + small position bonus)
+    9. Filename match (1 point)
     """
     score = 0.0
     position = 999999  # Default high position for papers without match in details
@@ -268,60 +279,74 @@ def calculate_relevance_score(paper: Dict, query: str) -> Tuple[float, int]:
     filename = paper.get('file_name', '').lower()
     abstract = paper.get('abstract', '').lower()
     details = paper.get('details', '').lower()  # First page content
+    journal = paper.get('journal', '').lower()  # Journal name
+    year = paper.get('year', '')  # Publication year
 
-    # Title match (highest weight)
+    # Title match (highest weight - 20-25 points)
     if query_lower in title:
         # Exact word match in title
         if re.search(r'\b' + re.escape(query_lower) + r'\b', title):
-            score += 15.0
+            score += 20.0
             # Title starts with query
             if title.startswith(query_lower):
                 score += 5.0
         else:
-            score += 8.0
+            score += 12.0
 
-    # Author match (check both authors field AND details for author names)
+    # Author match (15 points)
     author_match, author_score = match_author(query, authors)
     if author_match:
-        score += 12.0 * author_score
+        score += 15.0 * author_score
 
-    # Tag match
+    # Journal match (12 points - important for filtering by publication venue)
+    if journal and query_lower in journal:
+        if re.search(r'\b' + re.escape(query_lower) + r'\b', journal):
+            score += 12.0
+        else:
+            score += 8.0
+
+    # Year match (10 points - searching by year)
+    if year and query_lower == year:
+        score += 10.0
+    elif year and query_lower in year:
+        score += 5.0
+
+    # Tag match (8 points)
     tag_match, tag_score = match_tag(query, tags)
     if tag_match:
         score += 8.0 * tag_score
 
-    # Keyword match
+    # Keyword match (6 points)
     if query_lower in keywords:
         if re.search(r'\b' + re.escape(query_lower) + r'\b', keywords):
             score += 6.0
         else:
             score += 3.0
 
-    # Abstract match
+    # Abstract match (4 points)
     if query_lower in abstract:
         if re.search(r'\b' + re.escape(query_lower) + r'\b', abstract):
             score += 4.0
         else:
             score += 2.0
 
-    # Details (first page content) match - CRITICAL for finding papers by any content
+    # Details (first page content) match - lower priority, but still useful for full-text search
     if details and query_lower in details:
         # Find position (excluding leading spaces)
         details_stripped = details.lstrip()
         pos = details_stripped.find(query_lower)
         if pos >= 0:
             position = pos
-            # Position-based bonus: earlier position = higher score
-            # Max bonus of 10 for position 0, decreasing as position increases
-            position_bonus = max(0, 10.0 - (pos / 100.0))
+            # Reduced position-based bonus: max 3 points for position 0
+            position_bonus = max(0, 3.0 - (pos / 500.0))
             score += position_bonus
 
         if re.search(r'\b' + re.escape(query_lower) + r'\b', details):
-            score += 5.0  # Higher weight for exact word match
+            score += 2.0  # Reduced weight for details match
         else:
-            score += 3.0  # Partial match still counts
+            score += 1.0  # Partial match
 
-    # Filename match (low priority)
+    # Filename match (lowest priority - 1 point)
     if query_lower in filename:
         score += 1.0
 
