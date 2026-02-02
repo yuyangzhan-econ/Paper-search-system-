@@ -10,6 +10,7 @@ import threading
 import time
 import socket
 import platform
+import inspect
 
 # Add current directory to path
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,8 +64,6 @@ def set_windows_icon(icon_path):
         from ctypes import wintypes
 
         # Constants
-        GCL_HICON = -14
-        GCL_HICONSM = -34
         ICON_SMALL = 0
         ICON_BIG = 1
         WM_SETICON = 0x0080
@@ -84,7 +83,7 @@ def set_windows_icon(icon_path):
                           LR_LOADFROMFILE | LR_DEFAULTSIZE)
 
         if hicon:
-            # Find the window
+            # Find the window by title
             def enum_windows_callback(hwnd, results):
                 if user32.IsWindowVisible(hwnd):
                     length = user32.GetWindowTextLengthW(hwnd) + 1
@@ -103,7 +102,7 @@ def set_windows_icon(icon_path):
                 user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
 
     except Exception as e:
-        print(f"Note: Could not set window icon: {e}")
+        pass  # Silently ignore icon setting errors
 
 
 def main():
@@ -144,21 +143,22 @@ def main():
         'confirm_close': False,
     }
 
-    # Check if icon exists and pywebview version supports it
+    # Check if pywebview supports 'icon' parameter
     if os.path.exists(ICON_PATH):
         try:
-            # Try to use icon parameter (pywebview >= 4.0)
-            window_params['icon'] = ICON_PATH
+            sig = inspect.signature(webview.create_window)
+            if 'icon' in sig.parameters:
+                window_params['icon'] = ICON_PATH
         except Exception:
             pass
 
     # Create native window
     window = webview.create_window(**window_params)
 
-    # Set icon after window creation (for older pywebview or as fallback)
+    # Set icon after window creation using Windows API (fallback)
     def on_loaded():
         if os.path.exists(ICON_PATH):
-            time.sleep(0.5)  # Wait for window to fully load
+            time.sleep(0.8)  # Wait for window to fully load
             set_windows_icon(ICON_PATH)
 
     if os.path.exists(ICON_PATH):

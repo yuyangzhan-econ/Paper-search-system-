@@ -45,7 +45,8 @@ def get_current_version():
 
 
 def get_latest_release_info():
-    """Get latest release info from GitHub API."""
+    """Get latest release info from GitHub API, with fallback to direct download."""
+    # First try to get release info from API
     try:
         req = urllib.request.Request(
             GITHUB_API_URL,
@@ -59,21 +60,29 @@ def get_latest_release_info():
                 'body': data.get('body', ''),
                 'download_url': data.get('zipball_url', GITHUB_ZIP_URL),
                 'published_at': data.get('published_at', ''),
+                'api_used': True,
             }
     except urllib.error.HTTPError as e:
         if e.code == 404:
             # No releases yet, use main branch
-            return {
-                'version': 'latest',
-                'name': 'Latest from main branch',
-                'body': '',
-                'download_url': GITHUB_ZIP_URL,
-                'published_at': '',
-            }
-        raise
+            pass
+        elif e.code == 403:
+            # Rate limit exceeded, use direct download
+            print("       Note: GitHub API rate limit reached, using direct download.")
+        else:
+            print(f"       Note: GitHub API error ({e.code}), using direct download.")
     except Exception as e:
-        print(f"Error fetching release info: {e}")
-        return None
+        print(f"       Note: Could not check API ({e}), using direct download.")
+
+    # Fallback: use direct download from main branch
+    return {
+        'version': 'latest',
+        'name': 'Latest from main branch',
+        'body': '',
+        'download_url': GITHUB_ZIP_URL,
+        'published_at': '',
+        'api_used': False,
+    }
 
 
 def download_file(url, dest_path, progress_callback=None):
@@ -97,7 +106,7 @@ def download_file(url, dest_path, progress_callback=None):
 
         return True
     except Exception as e:
-        print(f"Download error: {e}")
+        print(f"\n       Download error: {e}")
         return False
 
 
@@ -204,13 +213,17 @@ def update():
     latest_version = release_info['version']
     print(f"       Latest version: v{latest_version}")
 
-    if latest_version != 'latest' and current_version == latest_version:
+    # If we couldn't get API info, always offer to update
+    if release_info.get('api_used', True) and latest_version != 'latest' and current_version == latest_version:
         print()
         print("       You already have the latest version!")
         return True
 
     print()
-    print(f"       Update available: v{current_version} -> v{latest_version}")
+    if latest_version == 'latest':
+        print(f"       Will download latest code from main branch")
+    else:
+        print(f"       Update available: v{current_version} -> v{latest_version}")
     if release_info.get('name'):
         print(f"       Release: {release_info['name']}")
     print()
@@ -237,7 +250,9 @@ def update():
 
     def progress(downloaded, total):
         percent = (downloaded / total) * 100
-        bar = '=' * int(percent / 2) + '>' + ' ' * (50 - int(percent / 2))
+        bar_len = 40
+        filled = int(bar_len * downloaded / total)
+        bar = '=' * filled + '>' + ' ' * (bar_len - filled - 1)
         print(f"\r       [{bar}] {percent:.1f}%", end='', flush=True)
 
     success = download_file(release_info['download_url'], zip_path, progress)
@@ -282,7 +297,10 @@ def update():
     print("                   Update Complete!")
     print("=" * 60)
     print()
-    print(f"       Updated from v{current_version} to v{latest_version}")
+    if latest_version != 'latest':
+        print(f"       Updated from v{current_version} to v{latest_version}")
+    else:
+        print(f"       Updated to latest version from main branch")
     print()
     print("       Your data has been preserved:")
     print("       - Database (papers.db)")
