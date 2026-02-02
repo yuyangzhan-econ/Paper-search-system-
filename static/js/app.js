@@ -339,28 +339,36 @@ function renderPapers(papersToRender) {
 
     // Use requestAnimationFrame for smoother rendering
     renderTimeout = requestAnimationFrame(() => {
-        // Build HTML string
+        // Build HTML string - compact format with journal
         const html = papersToShow.map(paper => {
-            const shortDetails = paper.details ? paper.details.substring(0, 80) : '';
+            // Build meta info line (authors, journal, year, tags on same line)
+            const metaParts = [];
+            if (paper.authors) {
+                const shortAuthors = paper.authors.length > 40 ? paper.authors.substring(0, 40) + '...' : paper.authors;
+                metaParts.push(`<span class="paper-authors">${escapeHtml(shortAuthors)}</span>`);
+            }
+            if (paper.journal) {
+                const shortJournal = paper.journal.length > 30 ? paper.journal.substring(0, 30) + '...' : paper.journal;
+                metaParts.push(`<span class="paper-journal">${escapeHtml(shortJournal)}</span>`);
+            }
+            if (paper.year) {
+                metaParts.push(`<span class="paper-year">${paper.year}</span>`);
+            }
+            // Add tags inline (limit to 3)
+            if (paper.tags) {
+                const tagHtml = paper.tags.split(',').slice(0, 3).map(tag =>
+                    `<span class="paper-tag">${escapeHtml(tag.trim())}</span>`
+                ).join('');
+                metaParts.push(`<span class="paper-tags">${tagHtml}</span>`);
+            }
+
             return `
             <div class="paper-card ${currentPaper?.id === paper.id ? 'active' : ''}"
                  data-id="${paper.id}"
                  onclick="selectPaper(${paper.id})"
                  ondblclick="openPaper(${paper.id})">
                 <div class="paper-title">${escapeHtml(paper.title)}</div>
-                ${paper.authors ? `<div class="paper-authors">👤 ${escapeHtml(paper.authors)}</div>` : ''}
-                <div class="paper-meta">
-                    ${paper.year ? `<span class="paper-year">${paper.year}</span>` : ''}
-                </div>
-                ${paper.tags ? `
-                    <div class="paper-tags">
-                        ${paper.tags.split(',').slice(0, 4).map(tag =>
-                            `<span class="tag">${escapeHtml(tag.trim())}</span>`
-                        ).join('')}
-                    </div>
-                ` : ''}
-                ${shortDetails ? `<div class="paper-details" style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📝 ${escapeHtml(shortDetails)}...</div>` : ''}
-                <div class="paper-folder">📂 ${escapeHtml(getShortPath(paper.folder_path))}</div>
+                <div class="paper-meta">${metaParts.join('')}</div>
             </div>
         `}).join('');
 
@@ -369,7 +377,7 @@ function renderPapers(papersToRender) {
         // Show notice if results were truncated
         if (papersToRender.length > 200) {
             grid.insertAdjacentHTML('beforeend', `
-                <div style="text-align:center;padding:1rem;color:var(--text-muted);font-size:0.9rem;">
+                <div style="text-align:center;padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">
                     显示前200条结果，共${papersToRender.length}条
                 </div>
             `);

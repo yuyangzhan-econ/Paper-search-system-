@@ -10,10 +10,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- DOI Update Progress Bar (top of page, slim) -->
+    <div class="doi-progress-bar" id="doiProgressBar" style="display: none;">
+        <div class="doi-progress-inner" id="doiProgressInner"></div>
+        <span class="doi-progress-text" id="doiProgressText">正在更新论文信息...</span>
+        <button class="doi-progress-cancel" onclick="cancelDoiUpdate()" title="取消">✕</button>
+    </div>
+
     <div class="app-layout">
         <div class="main-content">
-            <!-- Header -->
-            <header class="header">
+            <!-- Fixed Header with Search -->
+            <header class="header sticky-header" id="stickyHeader">
                 <div class="header-content">
                     <div class="logo">
                         <span class="logo-icon">📚</span>
@@ -25,38 +32,48 @@
                     <nav class="header-nav">
                         <a href="/" class="nav-link active">本地文献</a>
                         <a href="/online" class="nav-link">在线搜索</a>
+                        <button class="nav-link" onclick="startDoiUpdate()" title="更新所有论文的DOI信息">🔄 更新DOI</button>
                         <button class="nav-link" onclick="openSettings()">⚙️ 设置</button>
                     </nav>
+                </div>
+                <!-- Compact Search Bar (always visible when scrolled) -->
+                <div class="compact-search" id="compactSearch">
+                    <div class="compact-search-box">
+                        <input type="text"
+                               id="searchInputCompact"
+                               class="compact-search-input"
+                               placeholder="搜索论文..."
+                               autocomplete="off">
+                        <button class="compact-search-btn" onclick="triggerSearchFromCompact()">🔍</button>
+                    </div>
+                    <div class="compact-stats">
+                        <span id="compactStatPapers">0</span> 篇 |
+                        <span id="compactStatTags">0</span> 标签
+                    </div>
                 </div>
             </header>
 
             <!-- Search Section -->
-            <section class="search-section">
+            <section class="search-section" id="searchSection">
                 <div class="search-container">
                     <div class="search-box">
                         <input type="text"
                                id="searchInput"
                                class="search-input"
-                               placeholder="搜索论文标题、作者、关键词... (按回车搜索)"
+                               placeholder="搜索论文标题、作者、期刊、关键词... (按回车搜索)"
                                autocomplete="off">
                         <span class="search-icon">🔍</span>
                         <button class="search-btn" onclick="triggerSearch()" title="搜索">搜索</button>
                         <button class="search-clear" onclick="clearSearch()">✕</button>
                         <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
                     </div>
-                    <div class="search-tips" style="text-align: center; margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                    <div class="search-tips">
                         提示：使用 + 表示或，* 表示且。例如：周黎安 + Li'an Zhou
                     </div>
                     <div class="stats-bar">
-                        <span class="stat-item">
-                            📄 <span class="stat-value" id="statPapers">0</span> 篇论文
-                        </span>
-                        <span class="stat-item">
-                            🏷️ <span class="stat-value" id="statTags">0</span> 个标签
-                        </span>
-                        <span class="stat-item">
-                            👤 <span class="stat-value" id="statAuthors">0</span> 位作者
-                        </span>
+                        <span class="stat-item">📄 <span class="stat-value" id="statPapers">0</span> 篇论文</span>
+                        <span class="stat-item">🏷️ <span class="stat-value" id="statTags">0</span> 个标签</span>
+                        <span class="stat-item">👤 <span class="stat-value" id="statAuthors">0</span> 位作者</span>
                     </div>
                 </div>
             </section>
@@ -66,25 +83,25 @@
                 <div class="drop-zone" id="dropZone">
                     <div class="drop-zone-content">
                         <span class="drop-icon">📥</span>
-                        <span class="drop-text">拖拽 PDF 文件到此处快速添加</span>
-                        <span class="drop-hint">或点击"添加文件"按钮选择文件</span>
+                        <span class="drop-text" id="dropText">拖拽 PDF 文件到此处快速添加</span>
+                        <span class="drop-hint">文件将保存到论文文件夹的 _uploads 目录</span>
                     </div>
-                    <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="handleFileSelect(event)">
+                    <input type="file" id="fileInput" accept=".pdf" multiple style="display:none">
                     <button class="btn btn-secondary btn-sm quick-add-btn" onclick="document.getElementById('fileInput').click()">
-                        📄 添加文件
+                        📄 选择文件
                     </button>
                 </div>
             </div>
 
             <!-- Results Section -->
             <section class="results-section">
-                <div class="results-list">
+                <div class="results-list" id="resultsList">
                     <div class="results-header">
                         <span class="results-title">
                             搜索结果 (<span class="results-count" id="resultsCount">0</span>)
                         </span>
                         <div class="results-actions">
-                            <button class="btn btn-secondary btn-sm" onclick="toggleQuickAdd()" title="快速添加论文">
+                            <button class="btn btn-secondary btn-sm" id="quickAddBtn" onclick="toggleQuickAdd()">
                                 ➕ 快速添加
                             </button>
                             <button class="btn btn-secondary btn-sm" onclick="scanPapers()">
@@ -107,7 +124,7 @@
                     </div>
                 </div>
 
-                <!-- Preview Panel -->
+                <!-- Preview Panel (fixed, with own scroll) -->
                 <div class="preview-panel" id="previewPanel">
                     <div class="preview-header">
                         <span class="preview-title">论文预览</span>
@@ -120,7 +137,7 @@
                             </button>
                         </div>
                     </div>
-                    <div class="preview-content">
+                    <div class="preview-content" id="previewContent">
                         <div class="preview-placeholder" id="previewPlaceholder">
                             <div class="preview-placeholder-icon">📄</div>
                             <p>选择一篇论文查看预览</p>
@@ -159,6 +176,10 @@
                         <label class="form-label">年份</label>
                         <input type="text" class="form-input" id="editYear" placeholder="2024">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">期刊</label>
+                    <input type="text" class="form-input" id="editJournal" placeholder="期刊名称">
                 </div>
                 <div class="form-group">
                     <label class="form-label">标签</label>
@@ -201,8 +222,7 @@
                     <div class="settings-section">
                         <h3 class="settings-title">论文文件夹</h3>
                         <div class="form-group">
-                            <input type="text" class="form-input" id="settingsPapersDir"
-                                   placeholder="E:\研究">
+                            <input type="text" class="form-input" id="settingsPapersDir" placeholder="E:\研究">
                         </div>
                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--spacing-md);">
                             设置您的论文存放目录，系统将扫描此目录下的所有 PDF 文件。
@@ -214,19 +234,13 @@
                             <input type="checkbox" id="settingsAutoPreview" onchange="toggleAutoPreview()" checked style="width: 18px; height: 18px; cursor: pointer;">
                             <label for="settingsAutoPreview" style="cursor: pointer;">自动加载PDF预览</label>
                         </div>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--spacing-md);">
-                            关闭后，点击论文时需手动点击"加载预览"按钮才能显示PDF。
-                        </p>
                     </div>
                     <div class="settings-section">
                         <h3 class="settings-title">数据管理</h3>
-                        <div style="display: flex; gap: var(--spacing-sm);">
-                            <button class="btn btn-secondary" onclick="verifyPapers()">
-                                验证文件
-                            </button>
-                            <button class="btn btn-secondary" onclick="cleanupPapers()">
-                                清理失效
-                            </button>
+                        <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="verifyPapers()">验证文件</button>
+                            <button class="btn btn-secondary" onclick="cleanupPapers()">清理失效</button>
+                            <button class="btn btn-secondary" onclick="startDoiUpdate()">更新DOI信息</button>
                         </div>
                     </div>
                 </div>
@@ -273,11 +287,125 @@
     </footer>
 
     <style>
+        /* DOI Progress Bar (top of page) */
+        .doi-progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 28px;
+            background: rgba(44, 82, 130, 0.95);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .doi-progress-inner {
+            height: 4px;
+            background: #48bb78;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            flex: 1;
+            max-width: 200px;
+        }
+        .doi-progress-text {
+            color: white;
+            font-size: 12px;
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .doi-progress-cancel {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 14px;
+        }
+        .doi-progress-cancel:hover {
+            color: white;
+        }
+        body.doi-updating {
+            padding-top: 28px;
+        }
+
+        /* Sticky Header */
+        .sticky-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(247, 250, 252, 0.95);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        .sticky-header.scrolled {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .sticky-header.scrolled .logo-subtitle {
+            display: none;
+        }
+        .sticky-header.scrolled .logo-text {
+            font-size: 1.1rem;
+        }
+
+        /* Compact Search (shows when scrolled) */
+        .compact-search {
+            display: none;
+            padding: 8px 0;
+            align-items: center;
+            gap: 16px;
+        }
+        .sticky-header.scrolled .compact-search {
+            display: flex;
+        }
+        .compact-search-box {
+            display: flex;
+            flex: 1;
+            max-width: 400px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .compact-search-input {
+            flex: 1;
+            border: none;
+            padding: 6px 12px;
+            font-size: 13px;
+            outline: none;
+        }
+        .compact-search-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+        }
+        .compact-stats {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Search Section */
+        .search-section {
+            padding: 1.5rem 2rem;
+        }
+        .search-tips {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
         /* Quick Add Zone */
         .quick-add-zone {
             display: none;
-            padding: 0 2rem;
-            margin-bottom: 1rem;
+            padding: 0 2rem 1rem;
         }
         .quick-add-zone.active {
             display: block;
@@ -289,77 +417,162 @@
             text-align: center;
             background: var(--bg-secondary);
             transition: all 0.3s ease;
-            position: relative;
         }
         .drop-zone.drag-over {
-            border-color: var(--primary-color);
-            background: rgba(var(--primary-rgb), 0.05);
+            border-color: var(--primary);
+            background: rgba(44, 82, 130, 0.05);
             transform: scale(1.01);
         }
         .drop-zone-content {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.25rem;
         }
-        .drop-icon {
-            font-size: 2rem;
+        .drop-icon { font-size: 1.5rem; }
+        .drop-text { font-size: 0.95rem; color: var(--text-primary); }
+        .drop-hint { font-size: 0.8rem; color: var(--text-muted); }
+        .quick-add-btn { margin-top: 0.5rem; }
+        .drop-zone.processing { pointer-events: none; opacity: 0.7; }
+
+        /* Results Section - Fixed Layout */
+        .results-section {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            padding: 0 2rem 2rem;
+            gap: 1.5rem;
         }
-        .drop-text {
-            font-size: 1rem;
-            color: var(--text-primary);
-            font-weight: 500;
+        .results-list {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            overflow: hidden;
         }
-        .drop-hint {
-            font-size: 0.85rem;
-            color: var(--text-muted);
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
         }
-        .quick-add-btn {
-            margin-top: 0.75rem;
-        }
-        .drop-zone.processing {
-            pointer-events: none;
-            opacity: 0.7;
-        }
-        .drop-zone.processing .drop-text {
-            color: var(--primary-color);
+        .papers-grid {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 8px;
         }
 
-        /* DOI Badge */
-        .doi-badge {
-            display: inline-flex;
+        /* Preview Panel - Fixed with own scroll */
+        .preview-panel {
+            width: 380px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            position: sticky;
+            top: 80px;
+            max-height: calc(100vh - 180px);
+        }
+        .preview-header {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
             align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            background: rgba(var(--primary-rgb), 0.1);
-            border-radius: 4px;
-            font-size: 0.75rem;
-            color: var(--primary-color);
-            cursor: pointer;
-            transition: background 0.2s;
+            flex-shrink: 0;
         }
-        .doi-badge:hover {
-            background: rgba(var(--primary-rgb), 0.2);
+        .preview-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
         }
-        .fetch-doi-btn {
-            padding: 4px 8px;
-            font-size: 0.75rem;
+
+        /* Compact Paper Card */
+        .paper-card {
+            padding: 10px 14px;
+            margin-bottom: 8px;
+            border-radius: 8px;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
-            border-radius: 4px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.2s ease;
         }
-        .fetch-doi-btn:hover {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
+        .paper-card:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
         }
-        .fetch-doi-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        .paper-card.active {
+            border-color: var(--primary);
+            background: rgba(44, 82, 130, 0.03);
+        }
+        .paper-card.updating {
+            animation: glowPulse 1.5s infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(44, 82, 130, 0.4); }
+            50% { box-shadow: 0 0 0 4px rgba(44, 82, 130, 0.1); }
         }
 
+        .paper-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+            margin-bottom: 4px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .paper-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            align-items: center;
+        }
+        .paper-authors {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .paper-journal {
+            color: var(--primary);
+            font-style: italic;
+            max-width: 150px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .paper-year {
+            color: var(--text-muted);
+        }
+        .paper-tags {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .paper-tag {
+            font-size: 0.7rem;
+            padding: 1px 6px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            color: var(--text-muted);
+        }
+        .paper-doi {
+            font-size: 0.7rem;
+            color: var(--primary);
+            opacity: 0.7;
+        }
+
+        /* Footer */
         .app-footer {
             position: fixed;
             bottom: 12px;
@@ -368,15 +581,13 @@
             opacity: 0.7;
             transition: opacity 0.3s ease;
         }
-        .app-footer:hover {
-            opacity: 1;
-        }
+        .app-footer:hover { opacity: 1; }
         .footer-box {
             display: flex;
             align-items: center;
             gap: 10px;
             padding: 8px 16px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,250,252,0.95) 100%);
+            background: rgba(255,255,255,0.95);
             border: 1px solid rgba(0,0,0,0.08);
             border-radius: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -384,45 +595,36 @@
             backdrop-filter: blur(8px);
         }
         .footer-version {
-            color: var(--primary-color);
+            color: var(--primary);
             font-weight: 600;
             font-family: 'Consolas', 'Monaco', monospace;
         }
-        .footer-divider {
-            color: rgba(0,0,0,0.15);
-            font-weight: 300;
-        }
+        .footer-divider { color: rgba(0,0,0,0.15); }
         .footer-link {
             display: flex;
             align-items: center;
             gap: 6px;
             color: var(--text-secondary);
             text-decoration: none;
-            transition: color 0.2s;
         }
-        .footer-link:hover {
-            color: var(--primary-color);
-        }
-        .footer-author {
-            font-weight: 500;
-        }
+        .footer-link:hover { color: var(--primary); }
+        .footer-author { font-weight: 500; }
         .footer-github {
             font-size: 11px;
             padding: 2px 6px;
             background: rgba(0,0,0,0.05);
             border-radius: 8px;
-            color: var(--text-muted);
-        }
-        .footer-link:hover .footer-github {
-            background: rgba(var(--primary-rgb), 0.1);
-            color: var(--primary-color);
         }
     </style>
 
     <script src="/static/js/app.js"></script>
     <script>
-        // Load version info on page load
+        // Current DOI update paper ID (for glowing effect)
+        let currentDoiUpdatePaperId = null;
+
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', function() {
+            // Load version info
             fetch('/api/version')
                 .then(r => r.json())
                 .then(data => {
@@ -432,12 +634,45 @@
 
             // Setup drag-drop zone
             setupDropZone();
+
+            // Setup file input
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+            // Setup scroll detection for sticky header
+            setupScrollDetection();
+
+            // Sync compact search with main search
+            document.getElementById('searchInputCompact').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('searchInput').value = this.value;
+                    triggerSearch();
+                }
+            });
+
+            // Check if DOI update is running
+            checkDoiProgress();
         });
 
-        // Toggle quick add zone visibility
+        // Setup scroll detection
+        function setupScrollDetection() {
+            const header = document.getElementById('stickyHeader');
+            const searchSection = document.getElementById('searchSection');
+
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 100) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            });
+        }
+
+        // Toggle quick add zone
         function toggleQuickAdd() {
             const zone = document.getElementById('quickAddZone');
+            const btn = document.getElementById('quickAddBtn');
             zone.classList.toggle('active');
+            btn.textContent = zone.classList.contains('active') ? '📥 收起快速添加' : '➕ 快速添加';
         }
 
         // Setup drop zone event handlers
@@ -445,13 +680,11 @@
             const dropZone = document.getElementById('dropZone');
             if (!dropZone) return;
 
-            // Prevent default drag behaviors
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropZone.addEventListener(eventName, preventDefaults, false);
                 document.body.addEventListener(eventName, preventDefaults, false);
             });
 
-            // Highlight drop zone
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false);
             });
@@ -460,7 +693,6 @@
                 dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false);
             });
 
-            // Handle dropped files
             dropZone.addEventListener('drop', handleDrop, false);
         }
 
@@ -469,110 +701,92 @@
             e.stopPropagation();
         }
 
-        // Handle file drop
+        // Handle file drop - use FormData upload
         function handleDrop(e) {
             const files = e.dataTransfer.files;
             if (files.length === 0) return;
-
-            // Try to get file path (works in some environments like pywebview on Windows)
-            const file = files[0];
-
-            // Check if it's a PDF
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                showToast('Only PDF files are supported', 'error');
-                return;
-            }
-
-            // Try to get the file path (available in some Electron/pywebview environments)
-            let filePath = file.path || (file.webkitRelativePath ? file.webkitRelativePath : null);
-
-            if (filePath) {
-                addFileByPath(filePath);
-            } else {
-                // File path not available - show instructions
-                showToast('Please copy the PDF to your papers folder and scan, or use the file path input', 'info');
-                promptForFilePath(file.name);
-            }
+            uploadFiles(files);
         }
 
         // Handle file selection via input
         function handleFileSelect(e) {
             const files = e.target.files;
             if (files.length === 0) return;
-
-            const file = files[0];
-
-            // Check if it's a PDF
-            if (!file.name.toLowerCase().endsWith('.pdf')) {
-                showToast('Only PDF files are supported', 'error');
-                return;
-            }
-
-            // Try to get file path
-            let filePath = file.path || (file.webkitRelativePath ? file.webkitRelativePath : null);
-
-            if (filePath) {
-                addFileByPath(filePath);
-            } else {
-                // File path not available in browser mode - show path input dialog
-                promptForFilePath(file.name);
-            }
-
-            // Reset input
+            uploadFiles(files);
             e.target.value = '';
         }
 
-        // Prompt user to enter file path manually
-        function promptForFilePath(fileName) {
-            const path = prompt(
-                `Please enter the full file path for: ${fileName}\n\nExample: E:\\研究\\论文\\${fileName}`,
-                `E:\\研究\\${fileName}`
-            );
+        // Upload files via FormData
+        function uploadFiles(files) {
+            const dropZone = document.getElementById('dropZone');
+            const dropText = document.getElementById('dropText');
+            const originalText = dropText.textContent;
 
-            if (path && path.trim()) {
-                addFileByPath(path.trim());
+            let successCount = 0;
+            let failCount = 0;
+            let processed = 0;
+
+            dropZone.classList.add('processing');
+            dropText.textContent = `正在上传 ${files.length} 个文件...`;
+
+            Array.from(files).forEach(file => {
+                if (!file.name.toLowerCase().endsWith('.pdf')) {
+                    failCount++;
+                    processed++;
+                    checkComplete();
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/api/papers/add-file', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        successCount++;
+                        // Auto-fetch DOI metadata
+                        if (data.paper.doi) {
+                            fetchDoiMetadata(data.paper.id);
+                        }
+                    } else {
+                        failCount++;
+                    }
+                })
+                .catch(() => failCount++)
+                .finally(() => {
+                    processed++;
+                    checkComplete();
+                });
+            });
+
+            function checkComplete() {
+                if (processed >= files.length) {
+                    dropZone.classList.remove('processing');
+                    dropText.textContent = originalText;
+
+                    if (successCount > 0) {
+                        showToast(`成功添加 ${successCount} 篇论文`, 'success');
+                        loadStats();
+                        if (document.getElementById('searchInput').value) {
+                            triggerSearch();
+                        }
+                    }
+                    if (failCount > 0) {
+                        showToast(`${failCount} 个文件添加失败`, 'error');
+                    }
+                }
             }
         }
 
-        // Add file by path
-        function addFileByPath(filePath) {
-            const dropZone = document.getElementById('dropZone');
-            const dropText = dropZone.querySelector('.drop-text');
-            const originalText = dropText.textContent;
-
-            dropZone.classList.add('processing');
-            dropText.textContent = 'Adding paper...';
-
-            fetch('/api/papers/add-file', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file_path: filePath })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(`Added: ${data.paper.title || data.paper.file_name}`, 'success');
-                    // Refresh stats and search results
-                    loadStats();
-                    if (document.getElementById('searchInput').value) {
-                        triggerSearch();
-                    }
-                    // Auto-fetch DOI metadata if paper has DOI
-                    if (data.paper.doi) {
-                        fetchDoiMetadata(data.paper.id);
-                    }
-                } else {
-                    showToast(data.error || 'Failed to add paper', 'error');
-                }
-            })
-            .catch(err => {
-                console.error('Error adding file:', err);
-                showToast('Error adding file', 'error');
-            })
-            .finally(() => {
-                dropZone.classList.remove('processing');
-                dropText.textContent = originalText;
-            });
+        // Trigger search from compact search bar
+        function triggerSearchFromCompact() {
+            const compactInput = document.getElementById('searchInputCompact');
+            document.getElementById('searchInput').value = compactInput.value;
+            triggerSearch();
         }
 
         // Fetch DOI metadata for a paper
@@ -583,14 +797,8 @@
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    showToast('Metadata updated from DOI', 'success');
-                    // Refresh display
                     if (document.getElementById('searchInput').value) {
                         triggerSearch();
-                    }
-                    // Update preview if this paper is selected
-                    if (window.currentPaperId === paperId) {
-                        selectPaper(paperId);
                     }
                     return data.paper;
                 }
@@ -602,6 +810,127 @@
             });
         }
 
+        // Start DOI update for all papers
+        function startDoiUpdate() {
+            fetch('/api/doi/update-all', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('开始更新DOI信息...', 'info');
+                    pollDoiProgress();
+                } else {
+                    showToast(data.error || '无法启动DOI更新', 'error');
+                }
+            })
+            .catch(() => showToast('无法启动DOI更新', 'error'));
+        }
+
+        // Check DOI progress on page load
+        function checkDoiProgress() {
+            fetch('/api/doi/progress')
+            .then(r => r.json())
+            .then(data => {
+                if (data.running) {
+                    pollDoiProgress();
+                }
+            });
+        }
+
+        // Poll DOI update progress
+        function pollDoiProgress() {
+            const progressBar = document.getElementById('doiProgressBar');
+            const progressInner = document.getElementById('doiProgressInner');
+            const progressText = document.getElementById('doiProgressText');
+
+            progressBar.style.display = 'flex';
+            document.body.classList.add('doi-updating');
+
+            function poll() {
+                fetch('/api/doi/progress')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.total > 0) {
+                        const pct = (data.current / data.total) * 100;
+                        progressInner.style.width = pct + '%';
+                        progressText.textContent = `正在更新 ${data.current}/${data.total}: ${data.current_paper_title || '...'}`;
+                    }
+
+                    // Update glowing effect on current paper
+                    updateGlowingPaper(data.current_paper_id);
+
+                    if (data.running) {
+                        setTimeout(poll, 500);
+                    } else {
+                        // Done
+                        progressBar.style.display = 'none';
+                        document.body.classList.remove('doi-updating');
+                        updateGlowingPaper(null);
+
+                        if (data.complete) {
+                            showToast(`DOI更新完成: ${data.updated} 成功, ${data.failed} 失败`, 'success');
+                            loadStats();
+                            if (document.getElementById('searchInput').value) {
+                                triggerSearch();
+                            }
+                        } else if (data.error) {
+                            showToast('DOI更新出错: ' + data.error, 'error');
+                        }
+                    }
+                })
+                .catch(() => {
+                    progressBar.style.display = 'none';
+                    document.body.classList.remove('doi-updating');
+                });
+            }
+
+            poll();
+        }
+
+        // Update glowing effect on paper being updated
+        function updateGlowingPaper(paperId) {
+            // Remove previous glow
+            document.querySelectorAll('.paper-card.updating').forEach(el => {
+                el.classList.remove('updating');
+            });
+
+            // Add glow to current paper
+            if (paperId) {
+                const card = document.querySelector(`.paper-card[data-id="${paperId}"]`);
+                if (card) {
+                    card.classList.add('updating');
+                }
+            }
+
+            currentDoiUpdatePaperId = paperId;
+        }
+
+        // Cancel DOI update
+        function cancelDoiUpdate() {
+            fetch('/api/doi/cancel', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('正在取消DOI更新...', 'info');
+                }
+            });
+        }
+
+        // Update compact stats
+        function updateCompactStats() {
+            const papers = document.getElementById('statPapers').textContent;
+            const tags = document.getElementById('statTags').textContent;
+            document.getElementById('compactStatPapers').textContent = papers;
+            document.getElementById('compactStatTags').textContent = tags;
+        }
+
+        // Override loadStats to also update compact stats
+        const originalLoadStats = window.loadStats;
+        if (originalLoadStats) {
+            window.loadStats = async function() {
+                await originalLoadStats();
+                updateCompactStats();
+            };
+        }
     </script>
 </body>
 </html>
