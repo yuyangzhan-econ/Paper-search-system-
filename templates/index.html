@@ -242,6 +242,55 @@
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
+    <!-- Footer with version info -->
+    <footer class="app-footer" id="appFooter">
+        <span class="footer-version" id="footerVersion">v1.0.0</span>
+        <span class="footer-divider">·</span>
+        <a href="https://github.com/yuyangzhan-econ/Paper-search-system-" target="_blank" rel="noopener" class="footer-link">
+            YuyangZhan-econ
+        </a>
+    </footer>
+
+    <style>
+        .app-footer {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            padding: 6px 12px;
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            z-index: 100;
+            background: transparent;
+        }
+        .app-footer:hover {
+            opacity: 0.9;
+        }
+        .footer-divider {
+            margin: 0 4px;
+        }
+        .footer-link {
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+        .footer-link:hover {
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+    </style>
+
     <script src="/static/js/app.js"></script>
+    <script>
+        // Load version info on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/version')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('footerVersion').textContent = 'v' + data.version;
+                })
+                .catch(() => {});
+        });
+    </script>
 </body>
 </html>

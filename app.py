@@ -21,6 +21,7 @@ import database as db
 import search
 import scanner
 import online_search
+from version import get_version_info
 
 app = Flask(__name__)
 CORS(app)
@@ -351,6 +352,12 @@ def api_get_config():
     return jsonify({
         'papers_dir': PAPERS_DIR
     })
+
+
+@app.route('/api/version', methods=['GET'])
+def api_version():
+    """Get version information."""
+    return jsonify(get_version_info())
 
 
 @app.route('/api/config', methods=['PUT'])
