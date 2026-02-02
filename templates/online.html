@@ -41,6 +41,59 @@
         .embed-header a {
             font-size: 0.85rem;
         }
+        .fallback-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            text-align: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+            margin: 1rem;
+            border-radius: 8px;
+        }
+        .fallback-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+        }
+        .fallback-title {
+            font-family: var(--font-serif);
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+        .fallback-text {
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 500px;
+            line-height: 1.6;
+        }
+        .fallback-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .fallback-btn:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .fallback-note {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -63,8 +116,28 @@
                 </div>
             </header>
 
-            <!-- Econ Paper Search Embed -->
-            <div class="embed-container">
+            <!-- Fallback for pywebview (shown by default, hidden if iframe loads) -->
+            <div class="fallback-container" id="fallbackContainer">
+                <div class="fallback-icon">🌐</div>
+                <div class="fallback-title">在线文献检索</div>
+                <div class="fallback-text">
+                    在本地窗口模式下，在线搜索功能需要在浏览器中打开。<br>
+                    点击下方按钮，将在您的默认浏览器中打开 Econ Paper Search 网站。
+                </div>
+                <a href="https://econ-paper-search.streamlit.app/"
+                   target="_blank"
+                   rel="noopener"
+                   class="fallback-btn"
+                   onclick="openInBrowser(event)">
+                    🔗 在浏览器中打开 Econ Paper Search
+                </a>
+                <div class="fallback-note">
+                    提示：如需在应用内查看，请使用浏览器模式（运行 start.bat）
+                </div>
+            </div>
+
+            <!-- Econ Paper Search Embed (for browser mode) -->
+            <div class="embed-container" id="embedContainer" style="display: none;">
                 <div class="embed-header">
                     <h3>📚 Econ Paper Search - 经济学论文检索</h3>
                     <a href="https://econ-paper-search.streamlit.app/" target="_blank" rel="noopener">
@@ -72,7 +145,8 @@
                     </a>
                 </div>
                 <iframe
-                    src="https://econ-paper-search.streamlit.app/?embedded=true"
+                    id="embedIframe"
+                    src="about:blank"
                     title="Econ Paper Search"
                     allow="clipboard-write">
                 </iframe>
@@ -84,7 +158,84 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // Toast utility (for any future notifications)
+        // Check if running in pywebview
+        function isInPywebview() {
+            // pywebview adds 'pywebview' to window object
+            return typeof window.pywebview !== 'undefined' ||
+                   navigator.userAgent.includes('pywebview') ||
+                   // Also check if we're not in a standard browser
+                   (window.location.protocol === 'http:' &&
+                    !navigator.userAgent.includes('Chrome') &&
+                    !navigator.userAgent.includes('Firefox') &&
+                    !navigator.userAgent.includes('Safari') &&
+                    !navigator.userAgent.includes('Edge'));
+        }
+
+        // Open URL in system browser
+        function openInBrowser(event) {
+            const url = 'https://econ-paper-search.streamlit.app/';
+
+            // Try to use pywebview's API to open in browser
+            if (typeof window.pywebview !== 'undefined' && window.pywebview.api) {
+                event.preventDefault();
+                // pywebview should handle opening external URLs
+                window.open(url, '_blank');
+            }
+            // Otherwise, default link behavior will work
+        }
+
+        // Initialize page
+        function initPage() {
+            const fallback = document.getElementById('fallbackContainer');
+            const embed = document.getElementById('embedContainer');
+            const iframe = document.getElementById('embedIframe');
+
+            // Try to detect if iframe will work
+            // In browser mode, show iframe; in pywebview, show fallback
+
+            // Simple heuristic: try to load iframe and check for errors
+            let iframeLoaded = false;
+
+            iframe.onload = function() {
+                iframeLoaded = true;
+                // If iframe loaded successfully, show it
+                try {
+                    // Try to access iframe content (will fail if blocked)
+                    const test = iframe.contentWindow.location.href;
+                    fallback.style.display = 'none';
+                    embed.style.display = 'flex';
+                } catch (e) {
+                    // Cross-origin or blocked, keep fallback
+                    console.log('Iframe blocked, showing fallback');
+                }
+            };
+
+            iframe.onerror = function() {
+                // Keep showing fallback
+                console.log('Iframe error, showing fallback');
+            };
+
+            // If running in what looks like pywebview, just show fallback
+            if (isInPywebview()) {
+                console.log('Detected pywebview, showing fallback');
+                return; // Keep fallback visible
+            }
+
+            // In browser mode, try to load iframe
+            embed.style.display = 'flex';
+            fallback.style.display = 'none';
+            iframe.src = 'https://econ-paper-search.streamlit.app/?embedded=true';
+
+            // Timeout: if iframe doesn't load in 5 seconds, show fallback
+            setTimeout(function() {
+                if (!iframeLoaded) {
+                    embed.style.display = 'none';
+                    fallback.style.display = 'flex';
+                }
+            }, 5000);
+        }
+
+        // Toast utility
         function showToast(message, type = 'info') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
@@ -93,6 +244,9 @@
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
+
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', initPage);
     </script>
 </body>
 </html>
