@@ -799,6 +799,8 @@ def fetch_doi_metadata(paper_id: int) -> Optional[Dict]:
     """
     Fetch metadata from CrossRef using paper's DOI.
     Updates the paper in database with fetched metadata.
+    ALWAYS overwrites title/authors/year/journal with DOI data since
+    the original PDF extraction is often inaccurate.
     Returns the updated paper dict.
     """
     paper = db.get_paper(paper_id)
@@ -821,17 +823,17 @@ def fetch_doi_metadata(paper_id: int) -> Optional[Dict]:
     if not metadata:
         return None
 
-    # Update paper with fetched metadata
+    # Update paper with fetched metadata - ALWAYS overwrite with DOI data
+    # because DOI metadata is more accurate than PDF extraction
     updates = {}
 
-    # Only update if current value is empty or less informative
-    if metadata.get('title') and (not paper.get('title') or paper['title'] == paper['file_name']):
+    if metadata.get('title'):
         updates['title'] = metadata['title']
 
-    if metadata.get('authors') and not paper.get('authors'):
+    if metadata.get('authors'):
         updates['authors'] = metadata['authors']
 
-    if metadata.get('year') and not paper.get('year'):
+    if metadata.get('year'):
         updates['year'] = metadata['year']
 
     if metadata.get('journal'):

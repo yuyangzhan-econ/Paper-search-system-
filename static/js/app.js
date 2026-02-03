@@ -339,27 +339,22 @@ function renderPapers(papersToRender) {
 
     // Use requestAnimationFrame for smoother rendering
     renderTimeout = requestAnimationFrame(() => {
-        // Build HTML string - compact format with journal
+        // Build HTML string - clear layout: title / authors / journal / year+tags / folder
         const html = papersToShow.map(paper => {
-            // Build meta info line (authors, journal, year, tags on same line)
-            const metaParts = [];
-            if (paper.authors) {
-                const shortAuthors = paper.authors.length > 40 ? paper.authors.substring(0, 40) + '...' : paper.authors;
-                metaParts.push(`<span class="paper-authors">${escapeHtml(shortAuthors)}</span>`);
-            }
-            if (paper.journal) {
-                const shortJournal = paper.journal.length > 30 ? paper.journal.substring(0, 30) + '...' : paper.journal;
-                metaParts.push(`<span class="paper-journal">${escapeHtml(shortJournal)}</span>`);
-            }
-            if (paper.year) {
-                metaParts.push(`<span class="paper-year">${paper.year}</span>`);
-            }
-            // Add tags inline (limit to 3)
-            if (paper.tags) {
-                const tagHtml = paper.tags.split(',').slice(0, 3).map(tag =>
-                    `<span class="paper-tag">${escapeHtml(tag.trim())}</span>`
-                ).join('');
-                metaParts.push(`<span class="paper-tags">${tagHtml}</span>`);
+            // Build year + tags line
+            let yearTagsHtml = '';
+            if (paper.year || paper.tags) {
+                const parts = [];
+                if (paper.year) {
+                    parts.push(`<span class="paper-year">${paper.year}</span>`);
+                }
+                if (paper.tags) {
+                    const tagHtml = paper.tags.split(',').slice(0, 4).map(tag =>
+                        `<span class="paper-tag">${escapeHtml(tag.trim())}</span>`
+                    ).join('');
+                    parts.push(tagHtml);
+                }
+                yearTagsHtml = `<div class="paper-year-tags">${parts.join('')}</div>`;
             }
 
             return `
@@ -368,7 +363,10 @@ function renderPapers(papersToRender) {
                  onclick="selectPaper(${paper.id})"
                  ondblclick="openPaper(${paper.id})">
                 <div class="paper-title">${escapeHtml(paper.title)}</div>
-                <div class="paper-meta">${metaParts.join('')}</div>
+                ${paper.authors ? `<div class="paper-authors">${escapeHtml(paper.authors)}</div>` : ''}
+                ${paper.journal ? `<div class="paper-journal">${escapeHtml(paper.journal)}</div>` : ''}
+                ${yearTagsHtml}
+                <div class="paper-folder">${escapeHtml(getShortPath(paper.folder_path))}</div>
             </div>
         `}).join('');
 

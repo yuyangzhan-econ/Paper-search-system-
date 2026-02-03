@@ -18,8 +18,9 @@ DOI_PATTERN = re.compile(
 )
 
 # Alternative patterns for DOIs that might be formatted differently
+# Matches: doi.org/, doi:, DOI:, DOI , https://doi.org/, http://dx.doi.org/, etc.
 DOI_URL_PATTERN = re.compile(
-    r'(?:doi\.org/|doi:|DOI:?\s*)(10\.\d{4,}/[^\s\]>\)"\']+)',
+    r'(?:https?://(?:dx\.)?doi\.org/|doi[:\s]+|DOI[:\s]+)(10\.\d{4,}/[^\s\]>\)"\']+)',
     re.IGNORECASE
 )
 
