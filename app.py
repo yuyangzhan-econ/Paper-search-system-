@@ -203,56 +203,12 @@ def api_delete_paper(paper_id):
 @app.route('/api/papers/add-file', methods=['POST'])
 def api_add_file():
     """
-    Add a single PDF file to the database (for drag-drop quick add).
-    Accepts either JSON with 'file_path' or multipart form with file upload.
+    Add a single PDF file to the database (for quick add).
+    Accepts JSON with 'file_path' - keeps file in original location.
     """
-    # Check if it's a file upload
-    if 'file' in request.files:
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'success': False, 'error': 'No file selected'}), 400
-
-        if not file.filename.lower().endswith('.pdf'):
-            return jsonify({'success': False, 'error': 'Only PDF files are supported'}), 400
-
-        # Save file to papers directory
-        filename = secure_filename(file.filename)
-        # Keep original filename if it's safe
-        if file.filename and not file.filename.startswith('.'):
-            filename = file.filename
-
-        # Create uploads subfolder in papers directory
-        upload_dir = os.path.join(PAPERS_DIR, '_uploads')
-        os.makedirs(upload_dir, exist_ok=True)
-
-        file_path = os.path.join(upload_dir, filename)
-
-        # Handle duplicate filenames
-        base, ext = os.path.splitext(filename)
-        counter = 1
-        while os.path.exists(file_path):
-            filename = f"{base}_{counter}{ext}"
-            file_path = os.path.join(upload_dir, filename)
-            counter += 1
-
-        file.save(file_path)
-
-        # Scan the uploaded file
-        paper = scanner.scan_single_file(file_path, PAPERS_DIR)
-
-        if paper:
-            return jsonify({
-                'success': True,
-                'paper': paper,
-                'message': 'Paper uploaded and added successfully'
-            })
-        else:
-            return jsonify({'success': False, 'error': 'Failed to scan uploaded file'}), 500
-
-    # Fallback to JSON path method
     data = request.get_json()
     if not data or not data.get('file_path'):
-        return jsonify({'success': False, 'error': 'file_path or file upload required'}), 400
+        return jsonify({'success': False, 'error': 'file_path is required'}), 400
 
     file_path = data['file_path'].strip()
 
@@ -264,7 +220,7 @@ def api_add_file():
     if not file_path.lower().endswith('.pdf'):
         return jsonify({'success': False, 'error': 'Only PDF files are supported'}), 400
 
-    # Scan the single file
+    # Scan the single file (keeps original path)
     paper = scanner.scan_single_file(file_path, PAPERS_DIR)
 
     if paper:
@@ -275,6 +231,45 @@ def api_add_file():
         })
     else:
         return jsonify({'success': False, 'error': 'Failed to scan file'}), 500
+
+
+@app.route('/api/doi/add-to-queue', methods=['POST'])
+def api_doi_add_to_queue():
+    """Add a paper to the DOI update queue (even if batch update is running)."""
+    global doi_progress
+
+    data = request.get_json()
+    if not data or not data.get('paper_id'):
+        return jsonify({'success': False, 'error': 'paper_id is required'}), 400
+
+    paper_id = data['paper_id']
+    paper = db.get_paper(paper_id)
+
+    if not paper:
+        return jsonify({'success': False, 'error': 'Paper not found'}), 404
+
+    if not paper.get('doi'):
+        return jsonify({'success': False, 'error': 'Paper has no DOI'}), 400
+
+    # If batch update is running, add to queue
+    if doi_progress['running']:
+        # Add to pending queue (will be processed after current batch)
+        if 'pending_queue' not in doi_progress:
+            doi_progress['pending_queue'] = []
+        if paper_id not in doi_progress['pending_queue']:
+            doi_progress['pending_queue'].append(paper_id)
+            doi_progress['total'] += 1
+        return jsonify({
+            'success': True,
+            'message': 'Added to DOI update queue',
+            'queue_position': doi_progress['total']
+        })
+    else:
+        # No batch running, update immediately
+        result = scanner.fetch_doi_metadata(paper_id)
+        if result:
+            return jsonify({'success': True, 'paper': result})
+        return jsonify({'success': False, 'error': 'Failed to fetch DOI metadata'}), 500
 
 
 @app.route('/api/papers/<int:paper_id>/fetch-doi', methods=['POST'])
@@ -301,8 +296,13 @@ def api_fetch_doi_metadata(paper_id):
         return jsonify({'success': False, 'error': 'Could not fetch metadata from CrossRef'}), 500
 
 
-def doi_update_worker():
-    """Background worker for updating papers with DOI metadata."""
+def doi_update_worker(update_all=False):
+    """
+    Background worker for updating papers with DOI metadata.
+    Args:
+        update_all: If True, update ALL papers with DOI (overwrite existing).
+                   If False, only update papers missing journal/title/authors.
+    """
     global doi_progress
     doi_progress['running'] = True
     doi_progress['complete'] = False
@@ -310,15 +310,21 @@ def doi_update_worker():
     doi_progress['current'] = 0
     doi_progress['updated'] = 0
     doi_progress['failed'] = 0
+    doi_progress['pending_queue'] = []
 
     try:
-        # Get all papers with DOI but missing metadata
         all_papers = db.get_all_papers()
-        papers_with_doi = [p for p in all_papers if p.get('doi') and (
-            not p.get('journal') or  # Missing journal
-            p.get('title') == p.get('file_name') or  # Title is just filename
-            not p.get('authors')  # Missing authors
-        )]
+
+        if update_all:
+            # Update ALL papers with DOI
+            papers_with_doi = [p for p in all_papers if p.get('doi')]
+        else:
+            # Only update papers missing metadata
+            papers_with_doi = [p for p in all_papers if p.get('doi') and (
+                not p.get('journal') or  # Missing journal
+                p.get('title') == p.get('file_name') or  # Title is just filename
+                not p.get('authors')  # Missing authors
+            )]
 
         doi_progress['total'] = len(papers_with_doi)
 
@@ -336,11 +342,29 @@ def doi_update_worker():
                     doi_progress['updated'] += 1
                 else:
                     doi_progress['failed'] += 1
-            except Exception as e:
+            except Exception:
                 doi_progress['failed'] += 1
 
             # Rate limiting - be nice to CrossRef API
             time.sleep(0.3)
+
+        # Process any papers added to queue during batch update
+        while doi_progress['pending_queue'] and doi_progress['running']:
+            paper_id = doi_progress['pending_queue'].pop(0)
+            doi_progress['current'] += 1
+            paper = db.get_paper(paper_id)
+            if paper:
+                doi_progress['current_paper_id'] = paper_id
+                doi_progress['current_paper_title'] = paper.get('title', '')[:50]
+                try:
+                    result = scanner.fetch_doi_metadata(paper_id)
+                    if result:
+                        doi_progress['updated'] += 1
+                    else:
+                        doi_progress['failed'] += 1
+                except Exception:
+                    doi_progress['failed'] += 1
+                time.sleep(0.3)
 
         doi_progress['complete'] = True
 
@@ -355,7 +379,7 @@ def doi_update_worker():
 
 @app.route('/api/doi/update-all', methods=['POST'])
 def api_doi_update_all():
-    """Start background DOI metadata update for all papers."""
+    """Start background DOI metadata update."""
     global doi_progress
 
     if doi_progress['running']:
@@ -365,14 +389,18 @@ def api_doi_update_all():
             'progress': doi_progress
         }), 409
 
+    data = request.get_json() or {}
+    update_all = data.get('update_all', False)  # True = overwrite all, False = only missing
+
     # Start background update
-    thread = threading.Thread(target=doi_update_worker)
+    thread = threading.Thread(target=doi_update_worker, args=(update_all,))
     thread.daemon = True
     thread.start()
 
     return jsonify({
         'success': True,
-        'message': 'DOI update started'
+        'message': 'DOI update started',
+        'mode': 'full' if update_all else 'incremental'
     })
 
 
@@ -421,8 +449,14 @@ def api_get_pdf(paper_id):
     return send_file(file_path, mimetype='application/pdf')
 
 
-def scan_worker(path):
-    """Background worker for scanning papers."""
+def scan_worker(path, incremental=False):
+    """
+    Background worker for scanning papers.
+    Args:
+        path: Directory to scan
+        incremental: If True, only add new files (don't update existing).
+                    If False, full rescan (may overwrite DOI data).
+    """
     global scan_progress
     scan_progress['running'] = True
     scan_progress['complete'] = False
@@ -440,7 +474,7 @@ def scan_worker(path):
         scan_progress['current_file'] = filename
 
     try:
-        added, updated, skipped = scanner.scan_directory(path, progress_callback)
+        added, updated, skipped = scanner.scan_directory(path, progress_callback, incremental=incremental)
         scan_progress['added'] = added
         scan_progress['updated'] = updated
         scan_progress['skipped'] = skipped
@@ -468,6 +502,7 @@ def api_scan():
 
     data = request.get_json() or {}
     path = data.get('path', PAPERS_DIR)
+    incremental = data.get('incremental', False)  # True = only new files, False = full rescan
 
     if not os.path.exists(path):
         return jsonify({'success': False, 'error': f'Directory not found: {path}'}), 400
@@ -476,14 +511,15 @@ def api_scan():
     PAPERS_DIR = path
 
     # Start background scan
-    thread = threading.Thread(target=scan_worker, args=(path,))
+    thread = threading.Thread(target=scan_worker, args=(path, incremental))
     thread.daemon = True
     thread.start()
 
     return jsonify({
         'success': True,
         'message': 'Scan started',
-        'path': path
+        'path': path,
+        'mode': 'incremental' if incremental else 'full'
     })
 
 

@@ -8,6 +8,7 @@ from typing import List, Dict, Set, Tuple
 from pypinyin import lazy_pinyin, Style
 import jieba
 import database as db
+import journal_abbrev
 
 
 # Predefined tag synonyms for common research fields
@@ -299,11 +300,20 @@ def calculate_relevance_score(paper: Dict, query: str) -> Tuple[float, int]:
         score += 15.0 * author_score
 
     # Journal match (12 points - important for filtering by publication venue)
-    if journal and query_lower in journal:
-        if re.search(r'\b' + re.escape(query_lower) + r'\b', journal):
+    # Also check abbreviations (e.g., AER -> American Economic Review)
+    if journal:
+        journal_matched = False
+        # Direct match
+        if query_lower in journal:
+            if re.search(r'\b' + re.escape(query_lower) + r'\b', journal):
+                score += 12.0
+            else:
+                score += 8.0
+            journal_matched = True
+        # Abbreviation match (e.g., search "AER" matches "American Economic Review")
+        if not journal_matched and journal_abbrev.match_journal(query, paper.get('journal', '')):
             score += 12.0
-        else:
-            score += 8.0
+            journal_matched = True
 
     # Year match (10 points - searching by year)
     if year and query_lower == year:

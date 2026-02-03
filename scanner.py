@@ -591,9 +591,14 @@ def extract_tags_from_path(folder_path: str, base_path: str) -> List[str]:
     return tags
 
 
-def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, int]:
+def scan_directory(base_path: str, progress_callback=None, incremental=False) -> Tuple[int, int, int]:
     """
     Scan a directory for papers and add them to the database.
+    Args:
+        base_path: Directory to scan
+        progress_callback: Callback for progress updates
+        incremental: If True, only add NEW files (skip existing, preserve DOI data).
+                    If False, full rescan (update existing files but preserve DOI data).
     Returns (added_count, updated_count, skipped_count).
     """
     if not os.path.exists(base_path):
@@ -655,27 +660,39 @@ def scan_directory(base_path: str, progress_callback=None) -> Tuple[int, int, in
             }
 
             if existing:
+                if incremental:
+                    # Incremental mode: skip existing files entirely (preserve all data)
+                    skipped_count += 1
+                    continue
+
+                # Full rescan: update missing fields but PRESERVE DOI-fetched data
                 updates = {}
+                # Only update title if current title is just filename (not DOI-fetched)
                 if not existing['title'] or existing['title'] == existing['file_name']:
                     updates['title'] = title
+                # Only update authors if empty (not DOI-fetched)
                 if not existing['authors'] and authors:
                     updates['authors'] = authors
+                # Only update year if empty
                 if not existing['year'] and year:
                     updates['year'] = year
                 if not existing['abstract'] and pdf_meta['abstract']:
                     updates['abstract'] = pdf_meta['abstract']
                 if not existing['tags'] and tags:
                     updates['tags'] = ', '.join(tags)
-                # Always update details for searching
+                # Update details for searching (this is OK to update)
                 if pdf_meta.get('details'):
                     updates['details'] = pdf_meta['details']
                 # Update DOI if not already set
                 if not existing.get('doi') and pdf_meta.get('doi'):
                     updates['doi'] = pdf_meta['doi']
+                # NEVER overwrite journal - that's DOI-fetched data
 
                 if updates:
                     db.update_paper(existing['id'], **updates)
-                updated_count += 1
+                    updated_count += 1
+                else:
+                    skipped_count += 1
             else:
                 db.add_paper(**paper_data)
                 added_count += 1
