@@ -664,6 +664,153 @@ def api_version():
     return jsonify(get_version_info())
 
 
+# ============== Theme Settings Storage ==============
+
+THEME_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme_settings.json')
+
+@app.route('/api/theme', methods=['GET'])
+def api_get_theme():
+    """Get saved theme settings from server."""
+    try:
+        if os.path.exists(THEME_SETTINGS_FILE):
+            with open(THEME_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            return jsonify({'success': True, 'settings': settings})
+        return jsonify({'success': True, 'settings': None})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/theme', methods=['POST'])
+def api_save_theme():
+    """Save theme settings to server (persists across sessions)."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+
+        # Don't save blob URLs or large data - just save settings
+        settings_to_save = {k: v for k, v in data.items() if k != 'bgUrl' or not str(v).startswith('blob:')}
+
+        with open(THEME_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings_to_save, f, ensure_ascii=False, indent=2)
+
+        return jsonify({'success': True, 'message': 'Theme settings saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/theme/background', methods=['POST'])
+def api_save_theme_background():
+    """Save background image/video file path (not the file itself, just a reference)."""
+    try:
+        data = request.get_json()
+        if not data or 'path' not in data:
+            return jsonify({'success': False, 'error': 'path is required'}), 400
+
+        bg_path = data['path']
+
+        # Save background path to theme settings
+        settings = {}
+        if os.path.exists(THEME_SETTINGS_FILE):
+            with open(THEME_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+        settings['bgFilePath'] = bg_path
+        settings['bgType'] = data.get('type', 'image')
+
+        with open(THEME_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+
+        return jsonify({'success': True, 'message': 'Background path saved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/theme/background-file')
+def api_get_background_file():
+    """Serve the saved background file."""
+    try:
+        if not os.path.exists(THEME_SETTINGS_FILE):
+            return jsonify({'success': False, 'error': 'No theme settings'}), 404
+
+        with open(THEME_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+            settings = json.load(f)
+
+        bg_path = settings.get('bgFilePath')
+        if not bg_path or not os.path.exists(bg_path):
+            return jsonify({'success': False, 'error': 'Background file not found'}), 404
+
+        # Determine mime type
+        ext = os.path.splitext(bg_path)[1].lower()
+        mime_types = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mov': 'video/quicktime'
+        }
+        mime_type = mime_types.get(ext, 'application/octet-stream')
+
+        return send_file(bg_path, mimetype=mime_type)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============== File Path Resolution (for drag-drop) ==============
+
+@app.route('/api/papers/find-by-name', methods=['POST'])
+def api_find_file_by_name():
+    """
+    Find a PDF file by name in the papers directory.
+    Used for drag-drop to resolve original file path.
+    """
+    data = request.get_json()
+    if not data or not data.get('filename'):
+        return jsonify({'success': False, 'error': 'filename is required'}), 400
+
+    filename = data['filename']
+    matches = []
+
+    # Search for the file in papers directory
+    for root, dirs, files in os.walk(PAPERS_DIR):
+        # Skip hidden directories and _uploads
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != '_uploads']
+
+        for file in files:
+            if file.lower() == filename.lower():
+                full_path = os.path.join(root, file)
+                matches.append(full_path)
+
+    if len(matches) == 1:
+        # Exact one match - perfect
+        return jsonify({
+            'success': True,
+            'found': True,
+            'path': matches[0],
+            'message': 'File found'
+        })
+    elif len(matches) > 1:
+        # Multiple matches - return all for user to choose
+        return jsonify({
+            'success': True,
+            'found': True,
+            'multiple': True,
+            'paths': matches,
+            'message': f'Found {len(matches)} files with this name'
+        })
+    else:
+        # Not found
+        return jsonify({
+            'success': True,
+            'found': False,
+            'message': 'File not found in papers directory'
+        })
+
+
 @app.route('/api/config', methods=['PUT'])
 def api_set_config():
     """Update configuration."""

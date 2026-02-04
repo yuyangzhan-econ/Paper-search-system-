@@ -916,7 +916,7 @@
 
         function preventDefaults(e){e.preventDefault();e.stopPropagation();}
 
-        function handleDrop(e) {
+        async function handleDrop(e) {
             const files = e.dataTransfer.files;
             if (files && files.length > 0) {
                 const file = files[0];
@@ -925,19 +925,47 @@
                     return;
                 }
 
-                // Try to get file path (works in pywebview/Electron)
-                // In pywebview, the file.path property may be available
+                document.getElementById('dropText').textContent = '正在添加...';
+
+                // Method 1: Try to get file path directly (works in pywebview/Electron)
                 if (file.path) {
-                    // We have the full path - use it directly
                     addFileByPathValue(file.path);
+                    document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
                     return;
                 }
 
-                // Fallback: upload the file (will copy to _uploads folder)
+                // Method 2: Try to find the file by name in papers directory
+                try {
+                    const findResponse = await fetch('/api/papers/find-by-name', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({filename: file.name})
+                    });
+                    const findData = await findResponse.json();
+
+                    if (findData.success && findData.found) {
+                        if (findData.multiple) {
+                            // Multiple files found - let user choose or use first
+                            const paths = findData.paths;
+                            // Use the first match and inform user
+                            addFileByPathValue(paths[0]);
+                            document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
+                            showToast(`找到 ${paths.length} 个同名文件，已添加第一个`, 'info');
+                            return;
+                        } else {
+                            // Single match - use it
+                            addFileByPathValue(findData.path);
+                            document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.log('Could not find file by name:', e);
+                }
+
+                // Method 3: File not found in papers directory - upload to _uploads
                 const formData = new FormData();
                 formData.append('file', file);
-
-                document.getElementById('dropText').textContent = '正在添加...';
 
                 fetch('/api/papers/upload', {
                     method: 'POST',
@@ -947,7 +975,7 @@
                 .then(data => {
                     document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
                     if (data.success) {
-                        showToast('已添加: ' + (data.paper.title || data.paper.file_name) + ' (已复制到_uploads)', 'success');
+                        showToast('已添加: ' + (data.paper.title || data.paper.file_name) + ' (文件不在论文目录中，已复制到_uploads)', 'success');
                         loadStats();
                         if (document.getElementById('searchInput').value) triggerSearch();
                         // Auto-update DOI
@@ -1174,101 +1202,56 @@
             blurEnabled: true,
             bgType: 'none',
             bgUrl: '',
+            bgFilePath: '',  // Server-side file path for background
             bgMimeType: '',
-            bgIsObjectUrl: false,
             bgOverlayEnabled: false,
             overlayType: 'dark',
             overlayOpacity: 30
         };
 
-        // IndexedDB for storing large files (backgrounds)
-        let bgDB = null;
-        const DB_NAME = 'PaperSearchThemeDB';
-        const DB_STORE = 'backgrounds';
-
-        function initBgDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, 1);
-                request.onerror = () => reject(request.error);
-                request.onsuccess = () => { bgDB = request.result; resolve(bgDB); };
-                request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(DB_STORE)) {
-                        db.createObjectStore(DB_STORE, { keyPath: 'id' });
-                    }
-                };
-            });
-        }
-
-        async function saveBgToDB(blob, mimeType) {
-            if (!bgDB) await initBgDB();
-            return new Promise((resolve, reject) => {
-                const tx = bgDB.transaction(DB_STORE, 'readwrite');
-                const store = tx.objectStore(DB_STORE);
-                store.put({ id: 'currentBg', blob: blob, mimeType: mimeType });
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        }
-
-        async function loadBgFromDB() {
-            if (!bgDB) await initBgDB();
-            return new Promise((resolve, reject) => {
-                const tx = bgDB.transaction(DB_STORE, 'readonly');
-                const store = tx.objectStore(DB_STORE);
-                const request = store.get('currentBg');
-                request.onsuccess = () => resolve(request.result);
-                request.onerror = () => reject(request.error);
-            });
-        }
-
-        async function clearBgFromDB() {
-            if (!bgDB) await initBgDB();
-            return new Promise((resolve, reject) => {
-                const tx = bgDB.transaction(DB_STORE, 'readwrite');
-                const store = tx.objectStore(DB_STORE);
-                store.delete('currentBg');
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-        }
+        // Store object URL reference to revoke later
+        let currentBgObjectUrl = null;
 
         async function loadThemeSettings() {
-            const saved = localStorage.getItem('themeSettings');
-            if (saved) {
-                Object.assign(themeSettings, JSON.parse(saved));
-            }
-
-            // Load background from IndexedDB
+            // Load from server-side storage (persists across sessions)
             try {
-                await initBgDB();
-                const bgData = await loadBgFromDB();
-                if (bgData && bgData.blob) {
-                    currentBgObjectUrl = URL.createObjectURL(bgData.blob);
-                    themeSettings.bgUrl = currentBgObjectUrl;
-                    themeSettings.bgMimeType = bgData.mimeType;
-                    themeSettings.bgIsObjectUrl = true;
-                    if (bgData.mimeType.startsWith('video/')) {
-                        themeSettings.bgType = 'video';
-                    } else {
-                        themeSettings.bgType = 'image';
+                const response = await fetch('/api/theme');
+                const data = await response.json();
+                if (data.success && data.settings) {
+                    Object.assign(themeSettings, data.settings);
+
+                    // If there's a background file path saved, load it from server
+                    if (themeSettings.bgFilePath && themeSettings.bgType !== 'none') {
+                        themeSettings.bgUrl = '/api/theme/background-file?' + Date.now();
                     }
                 }
             } catch (e) {
-                console.log('Could not load background from IndexedDB:', e);
+                console.log('Could not load theme from server, trying localStorage:', e);
+                // Fallback to localStorage
+                const saved = localStorage.getItem('themeSettings');
+                if (saved) {
+                    Object.assign(themeSettings, JSON.parse(saved));
+                }
             }
 
             applyTheme();
         }
 
         function saveThemeSettings() {
-            // Save all settings - bgUrl can't be restored from localStorage but bgType tells us to check IndexedDB
+            // Save to server (primary - persists across sessions)
             const settingsToSave = {...themeSettings};
-            // Don't save the actual object URL (it won't work after reload)
-            // But DO save bgType so we know to load from IndexedDB
-            if (themeSettings.bgIsObjectUrl) {
-                settingsToSave.bgUrl = ''; // Clear the URL, will be restored from IndexedDB
+            // Don't save blob URLs
+            if (settingsToSave.bgUrl && settingsToSave.bgUrl.startsWith('blob:')) {
+                settingsToSave.bgUrl = '';
             }
+
+            fetch('/api/theme', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(settingsToSave)
+            }).catch(e => console.log('Could not save theme to server:', e));
+
+            // Also save to localStorage as backup
             localStorage.setItem('themeSettings', JSON.stringify(settingsToSave));
         }
 
@@ -1450,16 +1433,13 @@
             saveThemeSettings();
         }
 
-        // Store object URL reference to revoke later
-        let currentBgObjectUrl = null;
-
         async function handleBgUpload(input) {
             const file = input.files[0];
             if (!file) return;
 
-            // Check file size (limit to 50MB to avoid memory issues)
-            if (file.size > 50 * 1024 * 1024) {
-                showToast('文件过大，请选择小于50MB的文件', 'error');
+            // Check file size (limit to 100MB)
+            if (file.size > 100 * 1024 * 1024) {
+                showToast('文件过大，请选择小于100MB的文件', 'error');
                 return;
             }
 
@@ -1480,17 +1460,33 @@
                 URL.revokeObjectURL(currentBgObjectUrl);
             }
 
-            // Save to IndexedDB for persistence across sessions
-            try {
-                await saveBgToDB(file, file.type);
-            } catch (e) {
-                console.log('Could not save to IndexedDB:', e);
-            }
+            // Try to get file path (works in pywebview/Electron)
+            if (file.path) {
+                // Save the file path to server for persistence
+                themeSettings.bgFilePath = file.path;
+                fetch('/api/theme/background', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({path: file.path, type: themeSettings.bgType})
+                }).catch(e => console.log('Could not save background path:', e));
 
-            // Create object URL for display
-            currentBgObjectUrl = URL.createObjectURL(file);
-            themeSettings.bgUrl = currentBgObjectUrl;
-            themeSettings.bgIsObjectUrl = true;
+                // Use server URL for display (persists across sessions)
+                themeSettings.bgUrl = '/api/theme/background-file?' + Date.now();
+            } else {
+                // No file path available - upload to server
+                const formData = new FormData();
+                formData.append('background', file);
+
+                try {
+                    // For browsers without file.path, use object URL (won't persist)
+                    currentBgObjectUrl = URL.createObjectURL(file);
+                    themeSettings.bgUrl = currentBgObjectUrl;
+                    showToast('背景已设置 (关闭后需重新设置)', 'info');
+                } catch (e) {
+                    showToast('无法设置背景', 'error');
+                    return;
+                }
+            }
 
             // Auto-enable transparency when background is set
             if (!themeSettings.transparencyEnabled) {
@@ -1499,7 +1495,10 @@
                 document.getElementById('transparencySliderRow').style.display = 'block';
             }
             applyTheme();
-            showToast('背景已设置', 'success');
+            saveThemeSettings();
+            if (file.path) {
+                showToast('背景已设置并保存', 'success');
+            }
         }
 
         async function clearBackground() {
@@ -1508,18 +1507,15 @@
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
-            // Clear from IndexedDB
-            try {
-                await clearBgFromDB();
-            } catch (e) {}
             themeSettings.bgType = 'none';
             themeSettings.bgUrl = '';
-            themeSettings.bgIsObjectUrl = false;
+            themeSettings.bgFilePath = '';
             document.querySelectorAll('input[name="bgType"]').forEach(r => r.checked = r.value === 'none');
             document.getElementById('bgUploadSection').style.display = 'none';
             document.getElementById('bgOverlaySection').style.display = 'none';
             document.getElementById('bgFileInput').value = '';
             applyTheme();
+            saveThemeSettings();
         }
 
         function toggleBgOverlay(enabled) {
@@ -1542,16 +1538,12 @@
             saveThemeSettings();
         }
 
-        async function resetTheme() {
+        function resetTheme() {
             // Revoke object URL if exists
             if (currentBgObjectUrl) {
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
-            // Clear from IndexedDB
-            try {
-                await clearBgFromDB();
-            } catch (e) {}
             Object.assign(themeSettings, {
                 mode: 'light',
                 accentColor: '#2c5282',
@@ -1563,14 +1555,15 @@
                 blurEnabled: true,
                 bgType: 'none',
                 bgUrl: '',
+                bgFilePath: '',
                 bgMimeType: '',
-                bgIsObjectUrl: false,
                 bgOverlayEnabled: false,
                 overlayType: 'dark',
                 overlayOpacity: 30
             });
             document.getElementById('bgFileInput').value = '';
             applyTheme();
+            saveThemeSettings();
             showToast('已恢复默认主题', 'success');
         }
 
