@@ -128,17 +128,37 @@ def fetch_metadata_from_crossref(doi: str, timeout: float = 5.0) -> Optional[Dic
             if titles:
                 result['title'] = titles[0]
 
-            # Authors
+            # Authors - improved extraction handling various formats
             authors_list = message.get('author', [])
             author_names = []
             for author in authors_list[:10]:  # Limit to first 10 authors
-                given = author.get('given', '')
-                family = author.get('family', '')
+                # Try standard given/family format first
+                given = author.get('given', '').strip()
+                family = author.get('family', '').strip()
+
+                # Some entries use 'name' instead of given/family (for organizations)
+                name = author.get('name', '').strip()
+
                 if family:
+                    # Standard author with family name
                     if given:
+                        # Clean up given name (sometimes has extra spaces or unusual chars)
+                        given = ' '.join(given.split())
                         author_names.append(f"{given} {family}")
                     else:
                         author_names.append(family)
+                elif name:
+                    # Organization or single-name entry
+                    # Skip if it looks like an organization (contains keywords)
+                    org_keywords = ['university', 'institute', 'department', 'center', 'centre', 'association', 'society', 'foundation']
+                    if not any(kw in name.lower() for kw in org_keywords):
+                        author_names.append(name)
+                else:
+                    # Try to get from sequence or literal
+                    literal = author.get('literal', '').strip()
+                    if literal:
+                        author_names.append(literal)
+
             result['authors'] = ', '.join(author_names)
 
             # Journal

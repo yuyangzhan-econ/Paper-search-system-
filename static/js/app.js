@@ -15,7 +15,6 @@ let isSearching = false;
 // Edit modal tag/author state
 let editAuthors = [];
 let editTags = [];
-let editKeywords = [];
 
 // Settings
 let autoPreview = localStorage.getItem('autoPreview') !== 'false'; // Default true
@@ -418,21 +417,26 @@ function showPreview(paper) {
     btnOpen.disabled = false;
     btnEdit.disabled = false;
 
-    // Format details for display - limit to 3 lines (approx 120 chars)
-    const detailsText = paper.details ? paper.details.substring(0, 150) : '';
+    // Format details for display
+    const detailsShort = paper.details ? paper.details.substring(0, 150) : '';
     const hasMoreDetails = paper.details && paper.details.length > 150;
 
-    // Render info with details field - compact styling
+    // Render info with details field - compact styling with expand/collapse
     info.innerHTML = `
         <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">${escapeHtml(paper.title)}</h3>
         ${paper.authors ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>作者：</strong>${escapeHtml(paper.authors)}</p>` : ''}
         ${paper.year ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>年份：</strong>${paper.year}</p>` : ''}
         ${paper.journal ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>期刊：</strong>${escapeHtml(paper.journal)}</p>` : ''}
         ${paper.tags ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
-        ${detailsText ? `
-            <div style="margin-top: 0.3rem; padding: 0.3rem 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.75rem; max-height: 3.6em; overflow: hidden; line-height: 1.2;">
-                <strong>详情：</strong>
-                <span style="color: var(--text-muted);">${escapeHtml(detailsText)}${hasMoreDetails ? '...' : ''}</span>
+        ${paper.details ? `
+            <div class="details-box" style="margin-top: 0.3rem; padding: 0.3rem 0.5rem; background: var(--bg-tertiary, #f5f5f5); border-radius: 4px; font-size: 0.75rem; line-height: 1.3;">
+                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDetails(this)">
+                    <strong>详情：</strong>
+                    ${hasMoreDetails ? '<span class="details-toggle" style="color: var(--primary, #2c5282); font-size: 0.7rem;">展开 ▼</span>' : ''}
+                </div>
+                <div class="details-content" style="color: var(--text-muted, #666); max-height: 3.6em; overflow: hidden; transition: max-height 0.3s ease;">
+                    ${escapeHtml(paper.details)}
+                </div>
             </div>
         ` : ''}
     `;
@@ -545,7 +549,6 @@ function openCurrentPaper() {
 function setupTagInputs() {
     setupChipInput('editAuthorsInput', 'authorChips', 'editAuthors', () => editAuthors, v => editAuthors = v);
     setupChipInput('editTagsInput', 'tagChips', 'editTags', () => editTags, v => editTags = v, true);
-    setupChipInput('editKeywordsInput', 'keywordChips', 'editKeywords', () => editKeywords, v => editKeywords = v);
 }
 
 function setupChipInput(inputId, chipsId, hiddenId, getArray, setArray, showSuggestions = false) {
@@ -610,9 +613,6 @@ function removeChip(event, index, containerId, hiddenId) {
     } else if (containerId === 'tagChips') {
         editTags.splice(index, 1);
         renderChips(containerId, editTags, v => editTags = v, hiddenId);
-    } else if (containerId === 'keywordChips') {
-        editKeywords.splice(index, 1);
-        renderChips(containerId, editKeywords, v => editKeywords = v, hiddenId);
     }
 }
 
@@ -652,22 +652,20 @@ function editCurrentPaper() {
     document.getElementById('editPaperId').value = currentPaper.id;
     document.getElementById('editTitle').value = currentPaper.title || '';
     document.getElementById('editYear').value = currentPaper.year || '';
+    document.getElementById('editJournal').value = currentPaper.journal || '';
     document.getElementById('editAbstract').value = currentPaper.abstract || '';
 
     // Parse comma-separated values into arrays
     editAuthors = (currentPaper.authors || '').split(',').map(s => s.trim()).filter(s => s);
     editTags = (currentPaper.tags || '').split(',').map(s => s.trim()).filter(s => s);
-    editKeywords = (currentPaper.keywords || '').split(',').map(s => s.trim()).filter(s => s);
 
     // Render chips
     renderChips('authorChips', editAuthors, v => editAuthors = v, 'editAuthors');
     renderChips('tagChips', editTags, v => editTags = v, 'editTags');
-    renderChips('keywordChips', editKeywords, v => editKeywords = v, 'editKeywords');
 
     // Clear inputs
     document.getElementById('editAuthorsInput').value = '';
     document.getElementById('editTagsInput').value = '';
-    document.getElementById('editKeywordsInput').value = '';
 
     // Show tag suggestions
     renderTagSuggestions('', () => editTags, v => editTags = v, 'tagChips', 'editTags');
@@ -686,7 +684,7 @@ async function savePaper() {
         title: document.getElementById('editTitle').value,
         authors: editAuthors.join(', '),
         tags: editTags.join(', '),
-        keywords: editKeywords.join(', '),
+        journal: document.getElementById('editJournal').value,
         year: document.getElementById('editYear').value,
         abstract: document.getElementById('editAbstract').value,
     };
@@ -918,6 +916,24 @@ function getTypeName(type) {
         'title': '标题'
     };
     return names[type] || type;
+}
+
+function toggleDetails(element) {
+    const box = element.closest('.details-box');
+    const content = box.querySelector('.details-content');
+    const toggle = box.querySelector('.details-toggle');
+
+    if (!toggle) return;
+
+    const isExpanded = content.style.maxHeight !== '3.6em';
+
+    if (isExpanded) {
+        content.style.maxHeight = '3.6em';
+        toggle.textContent = '展开 ▼';
+    } else {
+        content.style.maxHeight = content.scrollHeight + 'px';
+        toggle.textContent = '收起 ▲';
+    }
 }
 
 function showToast(message, type = 'info') {

@@ -48,6 +48,7 @@
                     <nav class="header-nav">
                         <a href="/" class="nav-link active">本地文献</a>
                         <a href="/online" class="nav-link">在线搜索</a>
+                        <button class="nav-link theme-btn" onclick="openThemeSettings()">🎨 主题</button>
                         <button class="nav-link" onclick="openSettings()">⚙️ 设置</button>
                     </nav>
                 </div>
@@ -269,6 +270,117 @@
         </div>
     </div>
 
+    <!-- Theme Settings Modal -->
+    <div class="modal-overlay" id="themeModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h2 class="modal-title">主题设置</h2>
+                <button class="modal-close" onclick="closeThemeSettings()">×</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <!-- Mode Selection -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">显示模式</h3>
+                    <div class="theme-mode-btns">
+                        <button class="theme-mode-btn" data-mode="light" onclick="setThemeMode('light')">
+                            <span class="mode-icon">☀️</span>
+                            <span>浅色模式</span>
+                        </button>
+                        <button class="theme-mode-btn" data-mode="dark" onclick="setThemeMode('dark')">
+                            <span class="mode-icon">🌙</span>
+                            <span>深色模式</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Accent Color -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">主题色</h3>
+                    <div class="theme-colors">
+                        <button class="color-btn" style="background:#2c5282" data-color="#2c5282" onclick="setAccentColor('#2c5282')" title="默认蓝"></button>
+                        <button class="color-btn" style="background:#881798" data-color="#881798" onclick="setAccentColor('#881798')" title="微软紫"></button>
+                        <button class="color-btn" style="background:#ff6b35" data-color="#ff6b35" onclick="setAccentColor('#ff6b35')" title="电光橙"></button>
+                        <button class="color-btn" style="background:#1a365d" data-color="#1a365d" onclick="setAccentColor('#1a365d')" title="海军蓝"></button>
+                        <button class="color-btn" style="background:#38a169" data-color="#38a169" onclick="setAccentColor('#38a169')" title="翠绿"></button>
+                        <button class="color-btn" style="background:#d53f8c" data-color="#d53f8c" onclick="setAccentColor('#d53f8c')" title="玫红"></button>
+                        <button class="color-btn" style="background:#dd6b20" data-color="#dd6b20" onclick="setAccentColor('#dd6b20')" title="橙色"></button>
+                        <button class="color-btn" style="background:#319795" data-color="#319795" onclick="setAccentColor('#319795')" title="青色"></button>
+                    </div>
+                    <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+                        <label style="font-size: 0.85rem;">自定义:</label>
+                        <input type="color" id="customAccentColor" value="#2c5282" onchange="setAccentColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer;">
+                    </div>
+                </div>
+
+                <!-- Transparency -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">透明度设置</h3>
+                    <label class="theme-checkbox">
+                        <input type="checkbox" id="enableTransparency" onchange="toggleTransparency(this.checked)">
+                        <span>启用模块半透明效果</span>
+                    </label>
+                    <div class="theme-slider-row" id="transparencySliderRow" style="display: none;">
+                        <label>透明度: <span id="transparencyValue">80</span>%</label>
+                        <input type="range" id="transparencySlider" min="50" max="95" value="80" oninput="setTransparency(this.value)">
+                    </div>
+                </div>
+
+                <!-- Background -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">背景设置</h3>
+                    <div class="theme-bg-options">
+                        <label class="theme-radio">
+                            <input type="radio" name="bgType" value="none" checked onchange="setBgType('none')">
+                            <span>无背景</span>
+                        </label>
+                        <label class="theme-radio">
+                            <input type="radio" name="bgType" value="image" onchange="setBgType('image')">
+                            <span>图片背景</span>
+                        </label>
+                        <label class="theme-radio">
+                            <input type="radio" name="bgType" value="video" onchange="setBgType('video')">
+                            <span>视频背景</span>
+                        </label>
+                    </div>
+                    <div id="bgUploadSection" style="display: none; margin-top: 12px;">
+                        <input type="file" id="bgFileInput" accept="image/*,video/*" onchange="handleBgUpload(this)" style="font-size: 0.85rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="clearBackground()" style="margin-left: 8px;">清除背景</button>
+                    </div>
+                    <div id="bgOverlaySection" style="display: none; margin-top: 12px;">
+                        <label class="theme-checkbox">
+                            <input type="checkbox" id="enableBgOverlay" onchange="toggleBgOverlay(this.checked)">
+                            <span>添加遮罩层</span>
+                        </label>
+                        <div id="bgOverlayOptions" style="display: none; margin-top: 8px;">
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <label class="theme-radio">
+                                    <input type="radio" name="overlayType" value="dark" checked onchange="setOverlayType('dark')">
+                                    <span>深色遮罩</span>
+                                </label>
+                                <label class="theme-radio">
+                                    <input type="radio" name="overlayType" value="light" onchange="setOverlayType('light')">
+                                    <span>浅色遮罩</span>
+                                </label>
+                            </div>
+                            <div class="theme-slider-row" style="margin-top: 8px;">
+                                <label>遮罩透明度: <span id="overlayOpacityValue">30</span>%</label>
+                                <input type="range" id="overlayOpacitySlider" min="10" max="70" value="30" oninput="setOverlayOpacity(this.value)">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="resetTheme()">恢复默认</button>
+                <button class="btn btn-primary" onclick="closeThemeSettings()">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Background Container -->
+    <div id="bgContainer" class="bg-container"></div>
+    <div id="bgOverlay" class="bg-overlay"></div>
+
     <!-- Toast Container -->
     <div class="toast-container" id="toastContainer"></div>
 
@@ -282,8 +394,181 @@
     </footer>
 
     <style>
+        /* Theme Variables */
+        :root {
+            --theme-mode: light;
+            --accent-color: #2c5282;
+            --accent-light: #4299e1;
+            --module-opacity: 1;
+
+            /* Light mode colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7fafc;
+            --bg-tertiary: #edf2f7;
+            --text-primary: #1a202c;
+            --text-secondary: #4a5568;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+        }
+
+        body.dark-mode {
+            --bg-primary: #1a202c;
+            --bg-secondary: #2d3748;
+            --bg-tertiary: #4a5568;
+            --text-primary: #f7fafc;
+            --text-secondary: #e2e8f0;
+            --text-muted: #a0aec0;
+            --border-color: #4a5568;
+        }
+
+        /* Background container */
+        .bg-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .bg-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Transparent mode styles */
+        body.transparent-mode .header {
+            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(12px);
+        }
+        body.transparent-mode .left-section {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+        }
+        body.transparent-mode .preview-panel {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(12px);
+        }
+        body.transparent-mode .preview-pdf {
+            background: var(--bg-primary) !important;
+        }
+        body.transparent-mode .paper-card {
+            background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(8px);
+        }
+        body.transparent-mode .search-section {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            margin: 8px;
+        }
+
+        /* Light mode RGB values */
+        body:not(.dark-mode) {
+            --header-bg-rgb: 255, 255, 255;
+            --section-bg-rgb: 247, 250, 252;
+            --card-bg-rgb: 255, 255, 255;
+        }
+        /* Dark mode RGB values */
+        body.dark-mode {
+            --header-bg-rgb: 45, 55, 72;
+            --section-bg-rgb: 26, 32, 44;
+            --card-bg-rgb: 45, 55, 72;
+        }
+
+        /* Theme modal styles */
+        .theme-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--border-color); }
+        .theme-section:last-child { border-bottom: none; }
+        .theme-section-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; color: var(--text-primary); }
+        .theme-mode-btns { display: flex; gap: 12px; }
+        .theme-mode-btn {
+            flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;
+            padding: 16px; border: 2px solid var(--border-color); border-radius: 8px;
+            background: var(--bg-secondary); cursor: pointer; transition: all 0.2s;
+        }
+        .theme-mode-btn:hover { border-color: var(--accent-color); }
+        .theme-mode-btn.active { border-color: var(--accent-color); background: rgba(44, 82, 130, 0.1); }
+        .theme-mode-btn .mode-icon { font-size: 1.5rem; }
+        .theme-colors { display: flex; gap: 10px; flex-wrap: wrap; }
+        .color-btn {
+            width: 36px; height: 36px; border-radius: 50%; border: 3px solid transparent;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .color-btn:hover { transform: scale(1.1); }
+        .color-btn.active { border-color: var(--text-primary); box-shadow: 0 0 0 2px var(--bg-primary); }
+        .theme-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; }
+        .theme-checkbox input { width: 18px; height: 18px; }
+        .theme-radio { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem; }
+        .theme-radio input { width: 16px; height: 16px; }
+        .theme-slider-row { margin-top: 12px; }
+        .theme-slider-row label { font-size: 0.85rem; display: block; margin-bottom: 4px; }
+        .theme-slider-row input[type="range"] { width: 100%; }
+
+        /* Apply accent color */
+        .btn-primary { background: var(--accent-color) !important; }
+        .btn-primary:hover { filter: brightness(1.1); }
+        .paper-card:hover, .paper-card.active { border-color: var(--accent-color) !important; }
+        .paper-journal { color: var(--accent-color) !important; }
+
+        /* Header with theme support */
+        .header {
+            background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 80%, black) 100%) !important;
+        }
+        .header .nav-link {
+            color: white !important;
+            background: rgba(255,255,255,0.1) !important;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-weight: 500;
+        }
+        .header .nav-link:hover {
+            background: rgba(255,255,255,0.25) !important;
+        }
+
+        /* Ensure text readability across modes */
+        body.dark-mode .modal { background: var(--bg-secondary); color: var(--text-primary); }
+        body.dark-mode .form-input, body.dark-mode .form-textarea, body.dark-mode .tag-input {
+            background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color);
+        }
+        body.dark-mode .modal-header, body.dark-mode .modal-footer { border-color: var(--border-color); }
+        body.dark-mode .search-input, body.dark-mode .quick-add-input {
+            background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color);
+        }
+        body.dark-mode .drop-zone { background: var(--bg-tertiary); border-color: var(--border-color); }
+        body.dark-mode .results-header { border-color: var(--border-color); }
+        body.dark-mode .paper-card { background: var(--bg-secondary); border-color: var(--border-color); }
+        body.dark-mode .paper-title { color: var(--text-primary); }
+        body.dark-mode .paper-authors, body.dark-mode .paper-folder { color: var(--text-secondary); }
+        body.dark-mode .preview-panel { background: var(--bg-secondary); border-color: var(--border-color); }
+        body.dark-mode .preview-header { border-color: var(--border-color); }
+        body.dark-mode .btn-secondary {
+            background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color);
+        }
+        body.dark-mode .floating-search-bar {
+            background: rgba(45, 55, 72, 0.95); border-color: var(--border-color);
+        }
+        body.dark-mode .floating-search-input {
+            background: var(--bg-tertiary); color: var(--text-primary);
+        }
+        body.dark-mode .back-to-top { background: rgba(var(--accent-color), 0.8); }
+        body.dark-mode .toast { background: var(--bg-secondary); color: var(--text-primary); }
+        body.dark-mode .scan-option-btn { background: var(--bg-tertiary); border-color: var(--border-color); }
+        body.dark-mode .theme-mode-btn { background: var(--bg-tertiary); border-color: var(--border-color); }
+        body.dark-mode .empty-state-title, body.dark-mode .empty-state-text { color: var(--text-secondary); }
+
         /* Layout */
-        html, body { height: 100%; margin: 0; overflow: hidden; }
+        html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg-primary); color: var(--text-primary); }
         .app-container {
             display: flex;
             height: 100vh;
@@ -742,6 +1027,204 @@
 
         const _origLoadStats = window.loadStats;
         if (_origLoadStats) { window.loadStats = async function() { await _origLoadStats(); updateFloatingStats(); }; }
+
+        // ============== Theme System ==============
+        const themeSettings = {
+            mode: 'light',
+            accentColor: '#2c5282',
+            transparencyEnabled: false,
+            transparency: 80,
+            bgType: 'none',
+            bgUrl: '',
+            bgOverlayEnabled: false,
+            overlayType: 'dark',
+            overlayOpacity: 30
+        };
+
+        function loadThemeSettings() {
+            const saved = localStorage.getItem('themeSettings');
+            if (saved) {
+                Object.assign(themeSettings, JSON.parse(saved));
+            }
+            applyTheme();
+        }
+
+        function saveThemeSettings() {
+            localStorage.setItem('themeSettings', JSON.stringify(themeSettings));
+        }
+
+        function applyTheme() {
+            // Mode
+            document.body.classList.toggle('dark-mode', themeSettings.mode === 'dark');
+
+            // Accent color
+            document.documentElement.style.setProperty('--accent-color', themeSettings.accentColor);
+            document.documentElement.style.setProperty('--primary', themeSettings.accentColor);
+
+            // Transparency
+            document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled);
+            document.documentElement.style.setProperty('--module-opacity', (themeSettings.transparency / 100).toFixed(2));
+
+            // Background
+            const bgContainer = document.getElementById('bgContainer');
+            const bgOverlay = document.getElementById('bgOverlay');
+
+            if (themeSettings.bgType === 'none') {
+                bgContainer.innerHTML = '';
+                bgContainer.style.backgroundImage = '';
+            } else if (themeSettings.bgType === 'image' && themeSettings.bgUrl) {
+                bgContainer.innerHTML = '';
+                bgContainer.style.backgroundImage = `url(${themeSettings.bgUrl})`;
+            } else if (themeSettings.bgType === 'video' && themeSettings.bgUrl) {
+                bgContainer.style.backgroundImage = '';
+                bgContainer.innerHTML = `<video autoplay loop muted playsinline><source src="${themeSettings.bgUrl}" type="video/mp4"></video>`;
+            }
+
+            // Background overlay
+            if (themeSettings.bgOverlayEnabled && themeSettings.bgType !== 'none') {
+                const overlayColor = themeSettings.overlayType === 'dark' ? '0,0,0' : '255,255,255';
+                bgOverlay.style.background = `rgba(${overlayColor}, ${themeSettings.overlayOpacity / 100})`;
+            } else {
+                bgOverlay.style.background = 'transparent';
+            }
+
+            // Update UI controls
+            updateThemeUI();
+        }
+
+        function updateThemeUI() {
+            // Mode buttons
+            document.querySelectorAll('.theme-mode-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === themeSettings.mode);
+            });
+
+            // Color buttons
+            document.querySelectorAll('.color-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.color === themeSettings.accentColor);
+            });
+            document.getElementById('customAccentColor').value = themeSettings.accentColor;
+
+            // Transparency
+            document.getElementById('enableTransparency').checked = themeSettings.transparencyEnabled;
+            document.getElementById('transparencySliderRow').style.display = themeSettings.transparencyEnabled ? 'block' : 'none';
+            document.getElementById('transparencySlider').value = themeSettings.transparency;
+            document.getElementById('transparencyValue').textContent = themeSettings.transparency;
+
+            // Background
+            document.querySelectorAll('input[name="bgType"]').forEach(radio => {
+                radio.checked = radio.value === themeSettings.bgType;
+            });
+            document.getElementById('bgUploadSection').style.display = themeSettings.bgType !== 'none' ? 'block' : 'none';
+            document.getElementById('bgOverlaySection').style.display = themeSettings.bgType !== 'none' ? 'block' : 'none';
+
+            // Overlay
+            document.getElementById('enableBgOverlay').checked = themeSettings.bgOverlayEnabled;
+            document.getElementById('bgOverlayOptions').style.display = themeSettings.bgOverlayEnabled ? 'block' : 'none';
+            document.querySelectorAll('input[name="overlayType"]').forEach(radio => {
+                radio.checked = radio.value === themeSettings.overlayType;
+            });
+            document.getElementById('overlayOpacitySlider').value = themeSettings.overlayOpacity;
+            document.getElementById('overlayOpacityValue').textContent = themeSettings.overlayOpacity;
+        }
+
+        function openThemeSettings() {
+            updateThemeUI();
+            document.getElementById('themeModal').classList.add('active');
+        }
+
+        function closeThemeSettings() {
+            document.getElementById('themeModal').classList.remove('active');
+            saveThemeSettings();
+        }
+
+        function setThemeMode(mode) {
+            themeSettings.mode = mode;
+            applyTheme();
+        }
+
+        function setAccentColor(color) {
+            themeSettings.accentColor = color;
+            applyTheme();
+        }
+
+        function toggleTransparency(enabled) {
+            themeSettings.transparencyEnabled = enabled;
+            document.getElementById('transparencySliderRow').style.display = enabled ? 'block' : 'none';
+            applyTheme();
+        }
+
+        function setTransparency(value) {
+            themeSettings.transparency = parseInt(value);
+            document.getElementById('transparencyValue').textContent = value;
+            applyTheme();
+        }
+
+        function setBgType(type) {
+            themeSettings.bgType = type;
+            document.getElementById('bgUploadSection').style.display = type !== 'none' ? 'block' : 'none';
+            document.getElementById('bgOverlaySection').style.display = type !== 'none' ? 'block' : 'none';
+            if (type === 'none') {
+                themeSettings.bgUrl = '';
+            }
+            applyTheme();
+        }
+
+        function handleBgUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                themeSettings.bgUrl = e.target.result;
+                applyTheme();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearBackground() {
+            themeSettings.bgType = 'none';
+            themeSettings.bgUrl = '';
+            document.querySelectorAll('input[name="bgType"]').forEach(r => r.checked = r.value === 'none');
+            document.getElementById('bgUploadSection').style.display = 'none';
+            document.getElementById('bgOverlaySection').style.display = 'none';
+            applyTheme();
+        }
+
+        function toggleBgOverlay(enabled) {
+            themeSettings.bgOverlayEnabled = enabled;
+            document.getElementById('bgOverlayOptions').style.display = enabled ? 'block' : 'none';
+            applyTheme();
+        }
+
+        function setOverlayType(type) {
+            themeSettings.overlayType = type;
+            applyTheme();
+        }
+
+        function setOverlayOpacity(value) {
+            themeSettings.overlayOpacity = parseInt(value);
+            document.getElementById('overlayOpacityValue').textContent = value;
+            applyTheme();
+        }
+
+        function resetTheme() {
+            Object.assign(themeSettings, {
+                mode: 'light',
+                accentColor: '#2c5282',
+                transparencyEnabled: false,
+                transparency: 80,
+                bgType: 'none',
+                bgUrl: '',
+                bgOverlayEnabled: false,
+                overlayType: 'dark',
+                overlayOpacity: 30
+            });
+            applyTheme();
+            showToast('已恢复默认主题', 'success');
+        }
+
+        // Load theme on page load
+        document.addEventListener('DOMContentLoaded', loadThemeSettings);
     </script>
 </body>
 </html>
