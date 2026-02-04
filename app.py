@@ -44,7 +44,8 @@ scan_progress = {
     'updated': 0,
     'skipped': 0,
     'complete': False,
-    'error': None
+    'error': None,
+    'cancelled': False
 }
 
 # DOI update progress tracking
@@ -511,6 +512,7 @@ def scan_worker(path, incremental=False):
     scan_progress['running'] = True
     scan_progress['complete'] = False
     scan_progress['error'] = None
+    scan_progress['cancelled'] = False
     scan_progress['current'] = 0
     scan_progress['total'] = 0
     scan_progress['added'] = 0
@@ -577,6 +579,16 @@ def api_scan():
 def api_scan_progress():
     """Get current scan progress."""
     return jsonify(scan_progress)
+
+
+@app.route('/api/scan/cancel', methods=['POST'])
+def api_scan_cancel():
+    """Cancel current scan."""
+    global scan_progress
+    if scan_progress['running']:
+        scan_progress['cancelled'] = True
+        return jsonify({'success': True, 'message': 'Scan cancellation requested'})
+    return jsonify({'success': False, 'error': 'No scan in progress'})
 
 
 @app.route('/api/scan/stream', methods=['GET'])

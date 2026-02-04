@@ -156,20 +156,22 @@
                 </div>
                 <div class="doi-update-options" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
                     <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">DOI信息更新:</p>
-                    <button class="scan-option-btn small" onclick="startDoiUpdate(false)">
-                        <span class="scan-option-icon">🔍</span>
-                        <div class="scan-option-text">
-                            <strong>更新缺失</strong>
-                            <span>只更新缺少信息的论文</span>
-                        </div>
-                    </button>
-                    <button class="scan-option-btn small" onclick="startDoiUpdate(true)">
-                        <span class="scan-option-icon">🔄</span>
-                        <div class="scan-option-text">
-                            <strong>全部更新</strong>
-                            <span>重新获取所有论文的DOI信息</span>
-                        </div>
-                    </button>
+                    <div class="scan-options">
+                        <button class="scan-option-btn" onclick="startDoiUpdate(false)">
+                            <span class="scan-option-icon">🔍</span>
+                            <div class="scan-option-text">
+                                <strong>更新缺失</strong>
+                                <span>只更新缺少信息的论文</span>
+                            </div>
+                        </button>
+                        <button class="scan-option-btn" onclick="startDoiUpdate(true)">
+                            <span class="scan-option-icon">🔄</span>
+                            <div class="scan-option-text">
+                                <strong>全部更新</strong>
+                                <span>重新获取所有论文的DOI信息</span>
+                            </div>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -256,7 +258,10 @@
     <!-- Scan Progress Modal -->
     <div class="modal-overlay" id="scanModal">
         <div class="modal modal-sm">
-            <div class="modal-header"><h2 class="modal-title">扫描论文</h2></div>
+            <div class="modal-header">
+                <h2 class="modal-title">扫描论文</h2>
+                <button class="modal-close" onclick="cancelScan()">×</button>
+            </div>
             <div class="modal-body" style="text-align: center; padding: 2rem;">
                 <div class="scan-progress">
                     <div class="scan-icon">📂</div>
@@ -266,6 +271,9 @@
                     <div class="scan-status" id="scanStatus">正在准备...</div>
                     <div class="scan-detail" id="scanDetail"></div>
                 </div>
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button class="btn btn-secondary" onclick="cancelScan()">取消扫描</button>
             </div>
         </div>
     </div>
@@ -313,9 +321,26 @@
                     </div>
                 </div>
 
+                <!-- Header Customization -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">顶栏设置</h3>
+                    <label class="theme-checkbox">
+                        <input type="checkbox" id="headerUseAccent" checked onchange="setHeaderUseAccent(this.checked)">
+                        <span>顶栏使用主题色</span>
+                    </label>
+                    <div id="headerCustomColorRow" style="display: none; margin-top: 8px;">
+                        <label style="font-size: 0.85rem;">自定义顶栏颜色:</label>
+                        <input type="color" id="headerCustomColor" value="#2c5282" onchange="setHeaderColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer; margin-left: 8px;">
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>顶栏透明度: <span id="headerOpacityValue">100</span>%</label>
+                        <input type="range" id="headerOpacitySlider" min="0" max="100" value="100" oninput="setHeaderOpacity(this.value)">
+                    </div>
+                </div>
+
                 <!-- Transparency -->
                 <div class="theme-section">
-                    <h3 class="theme-section-title">透明度设置</h3>
+                    <h3 class="theme-section-title">模块透明度</h3>
                     <label class="theme-checkbox">
                         <input type="checkbox" id="enableTransparency" onchange="toggleTransparency(this.checked)">
                         <span>启用模块半透明效果</span>
@@ -325,6 +350,10 @@
                         <input type="range" id="transparencySlider" min="0" max="100" value="80" oninput="setTransparency(this.value)">
                         <small style="color: var(--text-muted); font-size: 0.75rem;">0%=完全透明, 100%=不透明</small>
                     </div>
+                    <label class="theme-checkbox" style="margin-top: 10px;">
+                        <input type="checkbox" id="enableBlur" checked onchange="toggleBlur(this.checked)">
+                        <span>启用毛玻璃效果</span>
+                    </label>
                 </div>
 
                 <!-- Background -->
@@ -475,13 +504,9 @@
         }
         body.transparent-mode .left-section {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .preview-panel {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .preview-pdf {
             background: var(--bg-primary) !important;
@@ -491,38 +516,33 @@
         }
         body.transparent-mode .paper-card {
             background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
         }
         body.transparent-mode .search-section {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
             border-radius: 12px;
             margin: 8px;
         }
         body.transparent-mode .floating-search-bar {
             background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .results-section {
             background: transparent !important;
         }
         body.transparent-mode .drop-zone {
             background: rgba(var(--card-bg-rgb), 0.7) !important;
-            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
-            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
         }
-        /* When opacity is 0, no blur needed */
-        body.transparent-mode.no-blur .left-section,
-        body.transparent-mode.no-blur .preview-panel,
-        body.transparent-mode.no-blur .paper-card,
-        body.transparent-mode.no-blur .search-section,
-        body.transparent-mode.no-blur .floating-search-bar,
-        body.transparent-mode.no-blur .drop-zone {
-            backdrop-filter: none !important;
-            -webkit-backdrop-filter: none !important;
+        /* Blur effect - controlled separately */
+        body.blur-enabled.transparent-mode .left-section,
+        body.blur-enabled.transparent-mode .preview-panel,
+        body.blur-enabled.transparent-mode .floating-search-bar {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.blur-enabled.transparent-mode .paper-card,
+        body.blur-enabled.transparent-mode .search-section,
+        body.blur-enabled.transparent-mode .drop-zone {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
         /* Theme modal styles */
@@ -559,13 +579,6 @@
         .paper-card:hover, .paper-card.active { border-color: var(--accent-color) !important; }
         .paper-journal { color: var(--accent-color) !important; }
 
-        /* Header with theme support - keep gradient in transparent mode */
-        .header {
-            background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 80%, black) 100%) !important;
-        }
-        body.transparent-mode .header {
-            background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 80%, black) 100%) !important;
-        }
         .header .nav-link {
             color: white !important;
             background: rgba(255,255,255,0.1) !important;
@@ -578,12 +591,27 @@
         }
         .header .logo-text, .header .logo-subtitle { color: white !important; }
 
-        /* Search suggestions must be on top */
+        /* Search suggestions must be on top of EVERYTHING */
         .suggestions-dropdown {
-            z-index: 9999 !important;
+            z-index: 99999 !important;
             position: absolute !important;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        .search-box { position: relative; z-index: 1000; }
+        .search-box { position: relative; z-index: 10000; }
+        .search-section { position: relative; z-index: 100; }
+        .quick-add-wrapper { position: relative; z-index: 50; }
+        .results-section { position: relative; z-index: 10; }
+
+        /* Header with customizable transparency */
+        .header {
+            background: linear-gradient(135deg, var(--header-color, var(--accent-color)) 0%, color-mix(in srgb, var(--header-color, var(--accent-color)) 80%, black) 100%) !important;
+            opacity: var(--header-opacity, 1);
+        }
+        body.transparent-mode .header {
+            background: linear-gradient(135deg, var(--header-color, var(--accent-color)) 0%, color-mix(in srgb, var(--header-color, var(--accent-color)) 80%, black) 100%) !important;
+        }
 
         /* Dark mode - lighter search section */
         body.dark-mode .search-section {
@@ -886,35 +914,11 @@
                     showToast('只支持PDF文件', 'error');
                     return;
                 }
-                // Upload file via FormData
-                const formData = new FormData();
-                formData.append('file', file);
-
-                document.getElementById('dropText').textContent = '正在上传...';
-
-                fetch('/api/papers/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
-                    if (data.success) {
-                        showToast('已添加: ' + (data.paper.title || data.paper.file_name), 'success');
-                        loadStats();
-                        if (document.getElementById('searchInput').value) triggerSearch();
-                        // Auto-update DOI
-                        if (data.paper.id) {
-                            queueDoiUpdate(data.paper.id);
-                        }
-                    } else {
-                        showToast(data.error || '上传失败', 'error');
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
-                    showToast('上传失败', 'error');
-                });
+                // Show message to use path input instead
+                // Browser security prevents getting original file path from drag-drop
+                showToast('请在输入框中粘贴文件完整路径', 'info');
+                document.getElementById('quickAddPath').focus();
+                document.getElementById('quickAddPath').placeholder = '粘贴文件路径，如 E:\\研究\\' + file.name;
             }
         }
 
@@ -1098,6 +1102,15 @@
             fetch('/api/doi/cancel', {method:'POST'}).then(r=>r.json()).then(d=>{if(d.success)showToast('正在取消...','info');});
         }
 
+        function cancelScan() {
+            fetch('/api/scan/cancel', {method:'POST'}).then(r=>r.json()).then(d=>{
+                document.getElementById('scanModal').classList.remove('active');
+                showToast('扫描已取消', 'info');
+            }).catch(() => {
+                document.getElementById('scanModal').classList.remove('active');
+            });
+        }
+
         function updateFloatingStats() {
             document.getElementById('floatingStatPapers').textContent = document.getElementById('statPapers').textContent;
             document.getElementById('floatingStatTags').textContent = document.getElementById('statTags').textContent;
@@ -1110,8 +1123,12 @@
         const themeSettings = {
             mode: 'light',
             accentColor: '#2c5282',
+            headerUseAccent: true,
+            headerColor: '#2c5282',
+            headerOpacity: 100,
             transparencyEnabled: false,
             transparency: 80,
+            blurEnabled: true,
             bgType: 'none',
             bgUrl: '',
             bgMimeType: '',
@@ -1121,11 +1138,83 @@
             overlayOpacity: 30
         };
 
-        function loadThemeSettings() {
+        // IndexedDB for storing large files (backgrounds)
+        let bgDB = null;
+        const DB_NAME = 'PaperSearchThemeDB';
+        const DB_STORE = 'backgrounds';
+
+        function initBgDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => { bgDB = request.result; resolve(bgDB); };
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(DB_STORE)) {
+                        db.createObjectStore(DB_STORE, { keyPath: 'id' });
+                    }
+                };
+            });
+        }
+
+        async function saveBgToDB(blob, mimeType) {
+            if (!bgDB) await initBgDB();
+            return new Promise((resolve, reject) => {
+                const tx = bgDB.transaction(DB_STORE, 'readwrite');
+                const store = tx.objectStore(DB_STORE);
+                store.put({ id: 'currentBg', blob: blob, mimeType: mimeType });
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function loadBgFromDB() {
+            if (!bgDB) await initBgDB();
+            return new Promise((resolve, reject) => {
+                const tx = bgDB.transaction(DB_STORE, 'readonly');
+                const store = tx.objectStore(DB_STORE);
+                const request = store.get('currentBg');
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function clearBgFromDB() {
+            if (!bgDB) await initBgDB();
+            return new Promise((resolve, reject) => {
+                const tx = bgDB.transaction(DB_STORE, 'readwrite');
+                const store = tx.objectStore(DB_STORE);
+                store.delete('currentBg');
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        async function loadThemeSettings() {
             const saved = localStorage.getItem('themeSettings');
             if (saved) {
                 Object.assign(themeSettings, JSON.parse(saved));
             }
+
+            // Load background from IndexedDB
+            try {
+                await initBgDB();
+                const bgData = await loadBgFromDB();
+                if (bgData && bgData.blob) {
+                    currentBgObjectUrl = URL.createObjectURL(bgData.blob);
+                    themeSettings.bgUrl = currentBgObjectUrl;
+                    themeSettings.bgMimeType = bgData.mimeType;
+                    themeSettings.bgIsObjectUrl = true;
+                    if (bgData.mimeType.startsWith('video/')) {
+                        themeSettings.bgType = 'video';
+                    } else {
+                        themeSettings.bgType = 'image';
+                    }
+                }
+            } catch (e) {
+                console.log('Could not load background from IndexedDB:', e);
+            }
+
             applyTheme();
         }
 
@@ -1147,10 +1236,15 @@
             document.documentElement.style.setProperty('--accent-color', themeSettings.accentColor);
             document.documentElement.style.setProperty('--primary', themeSettings.accentColor);
 
+            // Header customization
+            const headerColor = themeSettings.headerUseAccent ? themeSettings.accentColor : themeSettings.headerColor;
+            document.documentElement.style.setProperty('--header-color', headerColor);
+            document.documentElement.style.setProperty('--header-opacity', (themeSettings.headerOpacity / 100).toFixed(2));
+
             // Transparency - auto-enable when background is set
             const hasBackground = themeSettings.bgType !== 'none' && themeSettings.bgUrl;
             document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled || hasBackground);
-            document.body.classList.toggle('no-blur', themeSettings.transparency < 10);
+            document.body.classList.toggle('blur-enabled', themeSettings.blurEnabled);
             document.documentElement.style.setProperty('--module-opacity', (themeSettings.transparency / 100).toFixed(2));
 
             // Background
@@ -1202,11 +1296,19 @@
             });
             document.getElementById('customAccentColor').value = themeSettings.accentColor;
 
+            // Header
+            document.getElementById('headerUseAccent').checked = themeSettings.headerUseAccent;
+            document.getElementById('headerCustomColorRow').style.display = themeSettings.headerUseAccent ? 'none' : 'block';
+            document.getElementById('headerCustomColor').value = themeSettings.headerColor;
+            document.getElementById('headerOpacitySlider').value = themeSettings.headerOpacity;
+            document.getElementById('headerOpacityValue').textContent = themeSettings.headerOpacity;
+
             // Transparency
             document.getElementById('enableTransparency').checked = themeSettings.transparencyEnabled;
             document.getElementById('transparencySliderRow').style.display = themeSettings.transparencyEnabled ? 'block' : 'none';
             document.getElementById('transparencySlider').value = themeSettings.transparency;
             document.getElementById('transparencyValue').textContent = themeSettings.transparency;
+            document.getElementById('enableBlur').checked = themeSettings.blurEnabled;
 
             // Background
             document.querySelectorAll('input[name="bgType"]').forEach(radio => {
@@ -1254,8 +1356,28 @@
         function setTransparency(value) {
             themeSettings.transparency = parseInt(value);
             document.getElementById('transparencyValue').textContent = value;
-            // Toggle no-blur class when opacity is very low
-            document.body.classList.toggle('no-blur', themeSettings.transparency < 10);
+            applyTheme();
+        }
+
+        function toggleBlur(enabled) {
+            themeSettings.blurEnabled = enabled;
+            applyTheme();
+        }
+
+        function setHeaderUseAccent(useAccent) {
+            themeSettings.headerUseAccent = useAccent;
+            document.getElementById('headerCustomColorRow').style.display = useAccent ? 'none' : 'block';
+            applyTheme();
+        }
+
+        function setHeaderColor(color) {
+            themeSettings.headerColor = color;
+            applyTheme();
+        }
+
+        function setHeaderOpacity(value) {
+            themeSettings.headerOpacity = parseInt(value);
+            document.getElementById('headerOpacityValue').textContent = value;
             applyTheme();
         }
 
@@ -1272,9 +1394,15 @@
         // Store object URL reference to revoke later
         let currentBgObjectUrl = null;
 
-        function handleBgUpload(input) {
+        async function handleBgUpload(input) {
             const file = input.files[0];
             if (!file) return;
+
+            // Check file size (limit to 50MB to avoid memory issues)
+            if (file.size > 50 * 1024 * 1024) {
+                showToast('文件过大，请选择小于50MB的文件', 'error');
+                return;
+            }
 
             // Store file type
             themeSettings.bgMimeType = file.type;
@@ -1293,46 +1421,38 @@
                 URL.revokeObjectURL(currentBgObjectUrl);
             }
 
-            // Use object URL for videos (more efficient, won't crash)
-            // Use data URL for images (can be saved to localStorage)
-            if (file.type.startsWith('video/')) {
-                currentBgObjectUrl = URL.createObjectURL(file);
-                themeSettings.bgUrl = currentBgObjectUrl;
-                themeSettings.bgIsObjectUrl = true;
-
-                // Auto-enable transparency when background is set
-                if (!themeSettings.transparencyEnabled) {
-                    themeSettings.transparencyEnabled = true;
-                    document.getElementById('enableTransparency').checked = true;
-                    document.getElementById('transparencySliderRow').style.display = 'block';
-                }
-                applyTheme();
-                showToast('视频背景已设置 (刷新页面后需重新上传)', 'info');
-            } else {
-                // For images, use data URL (smaller, can be saved)
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    themeSettings.bgUrl = e.target.result;
-                    themeSettings.bgIsObjectUrl = false;
-                    // Auto-enable transparency when background is set
-                    if (!themeSettings.transparencyEnabled) {
-                        themeSettings.transparencyEnabled = true;
-                        document.getElementById('enableTransparency').checked = true;
-                        document.getElementById('transparencySliderRow').style.display = 'block';
-                    }
-                    applyTheme();
-                    showToast('背景已设置', 'success');
-                };
-                reader.readAsDataURL(file);
+            // Save to IndexedDB for persistence across sessions
+            try {
+                await saveBgToDB(file, file.type);
+            } catch (e) {
+                console.log('Could not save to IndexedDB:', e);
             }
+
+            // Create object URL for display
+            currentBgObjectUrl = URL.createObjectURL(file);
+            themeSettings.bgUrl = currentBgObjectUrl;
+            themeSettings.bgIsObjectUrl = true;
+
+            // Auto-enable transparency when background is set
+            if (!themeSettings.transparencyEnabled) {
+                themeSettings.transparencyEnabled = true;
+                document.getElementById('enableTransparency').checked = true;
+                document.getElementById('transparencySliderRow').style.display = 'block';
+            }
+            applyTheme();
+            showToast('背景已设置', 'success');
         }
 
-        function clearBackground() {
+        async function clearBackground() {
             // Revoke object URL if exists
             if (currentBgObjectUrl) {
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
+            // Clear from IndexedDB
+            try {
+                await clearBgFromDB();
+            } catch (e) {}
             themeSettings.bgType = 'none';
             themeSettings.bgUrl = '';
             themeSettings.bgIsObjectUrl = false;
@@ -1360,17 +1480,25 @@
             applyTheme();
         }
 
-        function resetTheme() {
+        async function resetTheme() {
             // Revoke object URL if exists
             if (currentBgObjectUrl) {
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
+            // Clear from IndexedDB
+            try {
+                await clearBgFromDB();
+            } catch (e) {}
             Object.assign(themeSettings, {
                 mode: 'light',
                 accentColor: '#2c5282',
+                headerUseAccent: true,
+                headerColor: '#2c5282',
+                headerOpacity: 100,
                 transparencyEnabled: false,
                 transparency: 80,
+                blurEnabled: true,
                 bgType: 'none',
                 bgUrl: '',
                 bgMimeType: '',
@@ -1380,7 +1508,6 @@
                 overlayOpacity: 30
             });
             document.getElementById('bgFileInput').value = '';
-            document.body.classList.remove('no-blur');
             applyTheme();
             showToast('已恢复默认主题', 'success');
         }
