@@ -604,13 +604,23 @@
         .quick-add-wrapper { position: relative; z-index: 50; }
         .results-section { position: relative; z-index: 10; }
 
-        /* Header with customizable transparency */
+        /* Header with customizable transparency - use rgba for background, NOT opacity */
         .header {
             background: linear-gradient(135deg, var(--header-color, var(--accent-color)) 0%, color-mix(in srgb, var(--header-color, var(--accent-color)) 80%, black) 100%) !important;
-            opacity: var(--header-opacity, 1);
+        }
+        /* Header text must ALWAYS be visible - never apply opacity to header itself */
+        .header .header-content,
+        .header .logo-text,
+        .header .logo-subtitle,
+        .header .nav-link,
+        .header .logo-icon {
+            opacity: 1 !important;
+            color: white !important;
         }
         body.transparent-mode .header {
-            background: linear-gradient(135deg, var(--header-color, var(--accent-color)) 0%, color-mix(in srgb, var(--header-color, var(--accent-color)) 80%, black) 100%) !important;
+            background: linear-gradient(135deg,
+                rgba(var(--header-color-rgb, 44, 82, 130), var(--header-opacity, 1)) 0%,
+                rgba(var(--header-color-rgb, 44, 82, 130), calc(var(--header-opacity, 1) * 0.8)) 100%) !important;
         }
 
         /* Dark mode - lighter search section */
@@ -914,11 +924,44 @@
                     showToast('只支持PDF文件', 'error');
                     return;
                 }
-                // Show message to use path input instead
-                // Browser security prevents getting original file path from drag-drop
-                showToast('请在输入框中粘贴文件完整路径', 'info');
-                document.getElementById('quickAddPath').focus();
-                document.getElementById('quickAddPath').placeholder = '粘贴文件路径，如 E:\\研究\\' + file.name;
+
+                // Try to get file path (works in pywebview/Electron)
+                // In pywebview, the file.path property may be available
+                if (file.path) {
+                    // We have the full path - use it directly
+                    addFileByPathValue(file.path);
+                    return;
+                }
+
+                // Fallback: upload the file (will copy to _uploads folder)
+                const formData = new FormData();
+                formData.append('file', file);
+
+                document.getElementById('dropText').textContent = '正在添加...';
+
+                fetch('/api/papers/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
+                    if (data.success) {
+                        showToast('已添加: ' + (data.paper.title || data.paper.file_name) + ' (已复制到_uploads)', 'success');
+                        loadStats();
+                        if (document.getElementById('searchInput').value) triggerSearch();
+                        // Auto-update DOI
+                        if (data.paper && data.paper.id) {
+                            queueDoiUpdate(data.paper.id);
+                        }
+                    } else {
+                        showToast(data.error || '添加失败', 'error');
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('dropText').textContent = '输入文件路径或拖拽到此处';
+                    showToast('添加失败', 'error');
+                });
             }
         }
 
@@ -1219,11 +1262,12 @@
         }
 
         function saveThemeSettings() {
-            // Don't save object URLs (videos) - they can't be restored
+            // Save all settings - bgUrl can't be restored from localStorage but bgType tells us to check IndexedDB
             const settingsToSave = {...themeSettings};
+            // Don't save the actual object URL (it won't work after reload)
+            // But DO save bgType so we know to load from IndexedDB
             if (themeSettings.bgIsObjectUrl) {
-                settingsToSave.bgUrl = '';
-                settingsToSave.bgType = 'none';
+                settingsToSave.bgUrl = ''; // Clear the URL, will be restored from IndexedDB
             }
             localStorage.setItem('themeSettings', JSON.stringify(settingsToSave));
         }
@@ -1236,9 +1280,15 @@
             document.documentElement.style.setProperty('--accent-color', themeSettings.accentColor);
             document.documentElement.style.setProperty('--primary', themeSettings.accentColor);
 
-            // Header customization
+            // Header customization - use RGB for transparent backgrounds
             const headerColor = themeSettings.headerUseAccent ? themeSettings.accentColor : themeSettings.headerColor;
             document.documentElement.style.setProperty('--header-color', headerColor);
+            // Convert hex to RGB for rgba() usage
+            const hexToRgb = (hex) => {
+                const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '44, 82, 130';
+            };
+            document.documentElement.style.setProperty('--header-color-rgb', hexToRgb(headerColor));
             document.documentElement.style.setProperty('--header-opacity', (themeSettings.headerOpacity / 100).toFixed(2));
 
             // Transparency - auto-enable when background is set
@@ -1340,45 +1390,53 @@
         function setThemeMode(mode) {
             themeSettings.mode = mode;
             applyTheme();
+            saveThemeSettings();
         }
 
         function setAccentColor(color) {
             themeSettings.accentColor = color;
             applyTheme();
+            saveThemeSettings();
         }
 
         function toggleTransparency(enabled) {
             themeSettings.transparencyEnabled = enabled;
             document.getElementById('transparencySliderRow').style.display = enabled ? 'block' : 'none';
             applyTheme();
+            saveThemeSettings();
         }
 
         function setTransparency(value) {
             themeSettings.transparency = parseInt(value);
             document.getElementById('transparencyValue').textContent = value;
             applyTheme();
+            saveThemeSettings();
         }
 
         function toggleBlur(enabled) {
             themeSettings.blurEnabled = enabled;
             applyTheme();
+            saveThemeSettings();
         }
 
         function setHeaderUseAccent(useAccent) {
             themeSettings.headerUseAccent = useAccent;
             document.getElementById('headerCustomColorRow').style.display = useAccent ? 'none' : 'block';
             applyTheme();
+            saveThemeSettings();
         }
 
         function setHeaderColor(color) {
             themeSettings.headerColor = color;
             applyTheme();
+            saveThemeSettings();
         }
 
         function setHeaderOpacity(value) {
             themeSettings.headerOpacity = parseInt(value);
             document.getElementById('headerOpacityValue').textContent = value;
             applyTheme();
+            saveThemeSettings();
         }
 
         function setBgType(type) {
@@ -1389,6 +1447,7 @@
                 themeSettings.bgUrl = '';
             }
             applyTheme();
+            saveThemeSettings();
         }
 
         // Store object URL reference to revoke later
@@ -1467,17 +1526,20 @@
             themeSettings.bgOverlayEnabled = enabled;
             document.getElementById('bgOverlayOptions').style.display = enabled ? 'block' : 'none';
             applyTheme();
+            saveThemeSettings();
         }
 
         function setOverlayType(type) {
             themeSettings.overlayType = type;
             applyTheme();
+            saveThemeSettings();
         }
 
         function setOverlayOpacity(value) {
             themeSettings.overlayOpacity = parseInt(value);
             document.getElementById('overlayOpacityValue').textContent = value;
             applyTheme();
+            saveThemeSettings();
         }
 
         async function resetTheme() {
