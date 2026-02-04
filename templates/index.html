@@ -299,6 +299,7 @@
                     <div class="theme-colors">
                         <button class="color-btn" style="background:#2c5282" data-color="#2c5282" onclick="setAccentColor('#2c5282')" title="默认蓝"></button>
                         <button class="color-btn" style="background:#881798" data-color="#881798" onclick="setAccentColor('#881798')" title="微软紫"></button>
+                        <button class="color-btn" style="background:#b146c2" data-color="#b146c2" onclick="setAccentColor('#b146c2')" title="亮紫色"></button>
                         <button class="color-btn" style="background:#ff6b35" data-color="#ff6b35" onclick="setAccentColor('#ff6b35')" title="电光橙"></button>
                         <button class="color-btn" style="background:#1a365d" data-color="#1a365d" onclick="setAccentColor('#1a365d')" title="海军蓝"></button>
                         <button class="color-btn" style="background:#38a169" data-color="#38a169" onclick="setAccentColor('#38a169')" title="翠绿"></button>
@@ -421,19 +422,22 @@
             --border-color: #4a5568;
         }
 
-        /* Background container */
+        /* Background container - must be behind everything */
         .bg-container {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -2;
+            width: 100vw;
+            height: 100vh;
+            z-index: -100;
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
         }
         .bg-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -442,40 +446,14 @@
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: -1;
+            width: 100vw;
+            height: 100vh;
+            z-index: -99;
             pointer-events: none;
         }
 
-        /* Transparent mode styles */
-        body.transparent-mode .header {
-            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(12px);
-        }
-        body.transparent-mode .left-section {
-            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-        }
-        body.transparent-mode .preview-panel {
-            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(12px);
-        }
-        body.transparent-mode .preview-pdf {
-            background: var(--bg-primary) !important;
-        }
-        body.transparent-mode .paper-card {
-            background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(8px);
-        }
-        body.transparent-mode .search-section {
-            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(8px);
-            border-radius: 12px;
-            margin: 8px;
-        }
-
         /* Light mode RGB values */
-        body:not(.dark-mode) {
+        :root {
             --header-bg-rgb: 255, 255, 255;
             --section-bg-rgb: 247, 250, 252;
             --card-bg-rgb: 255, 255, 255;
@@ -485,6 +463,60 @@
             --header-bg-rgb: 45, 55, 72;
             --section-bg-rgb: 26, 32, 44;
             --card-bg-rgb: 45, 55, 72;
+        }
+
+        /* Transparent mode - make everything see-through */
+        body.transparent-mode {
+            background: transparent !important;
+        }
+        body.transparent-mode .app-container {
+            background: transparent !important;
+        }
+        body.transparent-mode .header {
+            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.transparent-mode .left-section {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        body.transparent-mode .preview-panel {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.transparent-mode .preview-pdf {
+            background: var(--bg-primary) !important;
+        }
+        body.transparent-mode .preview-pdf iframe {
+            background: white !important;
+        }
+        body.transparent-mode .paper-card {
+            background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        body.transparent-mode .search-section {
+            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 12px;
+            margin: 8px;
+        }
+        body.transparent-mode .floating-search-bar {
+            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        body.transparent-mode .results-section {
+            background: transparent !important;
+        }
+        body.transparent-mode .drop-zone {
+            background: rgba(var(--card-bg-rgb), 0.7) !important;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
         }
 
         /* Theme modal styles */
@@ -538,6 +570,7 @@
 
         /* Ensure text readability across modes */
         body.dark-mode .modal { background: var(--bg-secondary); color: var(--text-primary); }
+        body.dark-mode .modal-title { color: var(--text-primary); }
         body.dark-mode .form-input, body.dark-mode .form-textarea, body.dark-mode .tag-input {
             background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color);
         }
@@ -561,23 +594,43 @@
         body.dark-mode .floating-search-input {
             background: var(--bg-tertiary); color: var(--text-primary);
         }
-        body.dark-mode .back-to-top { background: rgba(var(--accent-color), 0.8); }
+        body.dark-mode .floating-stats { color: var(--text-secondary) !important; }
+        body.dark-mode .back-to-top { background: var(--accent-color); }
         body.dark-mode .toast { background: var(--bg-secondary); color: var(--text-primary); }
         body.dark-mode .scan-option-btn { background: var(--bg-tertiary); border-color: var(--border-color); }
+        body.dark-mode .scan-option-btn strong { color: var(--text-primary) !important; }
+        body.dark-mode .scan-option-btn span { color: var(--text-secondary) !important; }
+        body.dark-mode .scan-option-text strong { color: var(--text-primary) !important; }
+        body.dark-mode .scan-option-text span { color: var(--text-muted) !important; }
         body.dark-mode .theme-mode-btn { background: var(--bg-tertiary); border-color: var(--border-color); }
+        body.dark-mode .theme-mode-btn span { color: var(--text-primary); }
         body.dark-mode .empty-state-title, body.dark-mode .empty-state-text { color: var(--text-secondary); }
+        body.dark-mode .app-footer { background: rgba(45, 55, 72, 0.9); }
+        body.dark-mode .footer-version { color: var(--accent-light, #4299e1); }
+        body.dark-mode .footer-link { color: var(--text-secondary); }
+
+        /* Search button hover uses accent color */
+        .search-btn { background: var(--accent-color) !important; color: white !important; }
+        .search-btn:hover { background: color-mix(in srgb, var(--accent-color) 80%, black) !important; }
 
         /* Layout */
-        html, body { height: 100%; margin: 0; overflow: hidden; background: var(--bg-primary); color: var(--text-primary); }
+        html, body { height: 100%; margin: 0; overflow: hidden; color: var(--text-primary); }
+        html { background: var(--bg-primary); }
+        body { background: var(--bg-primary); }
+        body.transparent-mode { background: transparent !important; }
+        body.transparent-mode html { background: transparent !important; }
         .app-container {
             display: flex;
             height: 100vh;
             overflow: hidden;
+            background: var(--bg-primary);
         }
+        body.transparent-mode .app-container { background: transparent !important; }
         .left-section {
             flex: 1;
             overflow-y: auto;
             padding-bottom: 60px;
+            background: var(--bg-primary);
         }
         .preview-panel {
             width: 420px;
@@ -1036,6 +1089,7 @@
             transparency: 80,
             bgType: 'none',
             bgUrl: '',
+            bgMimeType: '',
             bgOverlayEnabled: false,
             overlayType: 'dark',
             overlayOpacity: 30
@@ -1061,23 +1115,34 @@
             document.documentElement.style.setProperty('--accent-color', themeSettings.accentColor);
             document.documentElement.style.setProperty('--primary', themeSettings.accentColor);
 
-            // Transparency
-            document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled);
+            // Transparency - auto-enable when background is set
+            const hasBackground = themeSettings.bgType !== 'none' && themeSettings.bgUrl;
+            document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled || hasBackground);
             document.documentElement.style.setProperty('--module-opacity', (themeSettings.transparency / 100).toFixed(2));
 
             // Background
             const bgContainer = document.getElementById('bgContainer');
             const bgOverlay = document.getElementById('bgOverlay');
 
-            if (themeSettings.bgType === 'none') {
+            if (themeSettings.bgType === 'none' || !themeSettings.bgUrl) {
                 bgContainer.innerHTML = '';
-                bgContainer.style.backgroundImage = '';
+                bgContainer.style.backgroundImage = 'none';
+                bgContainer.style.display = 'none';
             } else if (themeSettings.bgType === 'image' && themeSettings.bgUrl) {
                 bgContainer.innerHTML = '';
-                bgContainer.style.backgroundImage = `url(${themeSettings.bgUrl})`;
+                bgContainer.style.display = 'block';
+                bgContainer.style.backgroundImage = `url("${themeSettings.bgUrl}")`;
             } else if (themeSettings.bgType === 'video' && themeSettings.bgUrl) {
-                bgContainer.style.backgroundImage = '';
-                bgContainer.innerHTML = `<video autoplay loop muted playsinline><source src="${themeSettings.bgUrl}" type="video/mp4"></video>`;
+                bgContainer.style.backgroundImage = 'none';
+                bgContainer.style.display = 'block';
+                // Detect video type from data URL or use generic
+                const videoType = themeSettings.bgMimeType || 'video/mp4';
+                bgContainer.innerHTML = `<video autoplay loop muted playsinline style="width:100%;height:100%;object-fit:cover;">
+                    <source src="${themeSettings.bgUrl}" type="${videoType}">
+                </video>`;
+                // Ensure video plays
+                const video = bgContainer.querySelector('video');
+                if (video) video.play().catch(() => {});
             }
 
             // Background overlay
@@ -1173,10 +1238,29 @@
             const file = input.files[0];
             if (!file) return;
 
+            // Store file type
+            themeSettings.bgMimeType = file.type;
+
+            // Detect if it's image or video
+            if (file.type.startsWith('image/')) {
+                themeSettings.bgType = 'image';
+                document.querySelector('input[name="bgType"][value="image"]').checked = true;
+            } else if (file.type.startsWith('video/')) {
+                themeSettings.bgType = 'video';
+                document.querySelector('input[name="bgType"][value="video"]').checked = true;
+            }
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 themeSettings.bgUrl = e.target.result;
+                // Auto-enable transparency when background is set
+                if (!themeSettings.transparencyEnabled) {
+                    themeSettings.transparencyEnabled = true;
+                    document.getElementById('enableTransparency').checked = true;
+                    document.getElementById('transparencySliderRow').style.display = 'block';
+                }
                 applyTheme();
+                showToast('背景已设置', 'success');
             };
             reader.readAsDataURL(file);
         }
@@ -1215,10 +1299,12 @@
                 transparency: 80,
                 bgType: 'none',
                 bgUrl: '',
+                bgMimeType: '',
                 bgOverlayEnabled: false,
                 overlayType: 'dark',
                 overlayOpacity: 30
             });
+            document.getElementById('bgFileInput').value = '';
             applyTheme();
             showToast('已恢复默认主题', 'success');
         }
