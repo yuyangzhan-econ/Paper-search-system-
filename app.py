@@ -233,6 +233,56 @@ def api_add_file():
         return jsonify({'success': False, 'error': 'Failed to scan file'}), 500
 
 
+@app.route('/api/papers/upload', methods=['POST'])
+def api_upload_file():
+    """
+    Upload a PDF file via FormData (for drag-drop).
+    Saves to _uploads folder and adds to database.
+    """
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+    if not file.filename.lower().endswith('.pdf'):
+        return jsonify({'success': False, 'error': 'Only PDF files are supported'}), 400
+
+    # Create _uploads folder if not exists
+    uploads_dir = os.path.join(PAPERS_DIR, '_uploads')
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    # Save file with unique name if exists
+    filename = file.filename
+    save_path = os.path.join(uploads_dir, filename)
+
+    # If file exists, add number suffix
+    counter = 1
+    base_name = os.path.splitext(filename)[0]
+    while os.path.exists(save_path):
+        filename = f"{base_name}_{counter}.pdf"
+        save_path = os.path.join(uploads_dir, filename)
+        counter += 1
+
+    file.save(save_path)
+
+    # Scan the uploaded file
+    paper = scanner.scan_single_file(save_path, PAPERS_DIR)
+
+    if paper:
+        return jsonify({
+            'success': True,
+            'paper': paper,
+            'message': 'Paper uploaded successfully'
+        })
+    else:
+        # Clean up if scan failed
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        return jsonify({'success': False, 'error': 'Failed to scan file'}), 500
+
+
 @app.route('/api/doi/add-to-queue', methods=['POST'])
 def api_doi_add_to_queue():
     """Add a paper to the DOI update queue (even if batch update is running)."""

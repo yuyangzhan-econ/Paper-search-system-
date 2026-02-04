@@ -418,23 +418,23 @@ function showPreview(paper) {
     btnOpen.disabled = false;
     btnEdit.disabled = false;
 
-    // Format details for display (truncate if too long)
-    const detailsText = paper.details ? paper.details.substring(0, 300) : '';
-    const hasMoreDetails = paper.details && paper.details.length > 300;
+    // Format details for display - limit to 3 lines (approx 120 chars)
+    const detailsText = paper.details ? paper.details.substring(0, 150) : '';
+    const hasMoreDetails = paper.details && paper.details.length > 150;
 
-    // Render info with details field
+    // Render info with details field - compact styling
     info.innerHTML = `
-        <h3>${escapeHtml(paper.title)}</h3>
-        ${paper.authors ? `<p><strong>作者：</strong>${escapeHtml(paper.authors)}</p>` : ''}
-        ${paper.year ? `<p><strong>年份：</strong>${paper.year}</p>` : ''}
-        ${paper.tags ? `<p><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
+        <h3 style="font-size: 0.95rem; margin-bottom: 0.4rem;">${escapeHtml(paper.title)}</h3>
+        ${paper.authors ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>作者：</strong>${escapeHtml(paper.authors)}</p>` : ''}
+        ${paper.year ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>年份：</strong>${paper.year}</p>` : ''}
+        ${paper.journal ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>期刊：</strong>${escapeHtml(paper.journal)}</p>` : ''}
+        ${paper.tags ? `<p style="font-size: 0.8rem; margin: 0.2rem 0;"><strong>标签：</strong>${escapeHtml(paper.tags)}</p>` : ''}
         ${detailsText ? `
-            <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.85rem;">
-                <strong>详情（首页内容）：</strong>
+            <div style="margin-top: 0.3rem; padding: 0.3rem 0.5rem; background: var(--bg-tertiary); border-radius: 4px; font-size: 0.75rem; max-height: 3.6em; overflow: hidden; line-height: 1.2;">
+                <strong>详情：</strong>
                 <span style="color: var(--text-muted);">${escapeHtml(detailsText)}${hasMoreDetails ? '...' : ''}</span>
             </div>
         ` : ''}
-        ${paper.abstract ? `<p style="margin-top: 0.5rem;"><strong>摘要：</strong>${escapeHtml(paper.abstract.substring(0, 200))}...</p>` : ''}
     `;
 
     // Check auto-preview setting
