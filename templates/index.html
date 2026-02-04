@@ -321,8 +321,9 @@
                         <span>启用模块半透明效果</span>
                     </label>
                     <div class="theme-slider-row" id="transparencySliderRow" style="display: none;">
-                        <label>透明度: <span id="transparencyValue">80</span>%</label>
-                        <input type="range" id="transparencySlider" min="50" max="95" value="80" oninput="setTransparency(this.value)">
+                        <label>不透明度: <span id="transparencyValue">80</span>%</label>
+                        <input type="range" id="transparencySlider" min="0" max="100" value="80" oninput="setTransparency(this.value)">
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">0%=完全透明, 100%=不透明</small>
                     </div>
                 </div>
 
@@ -472,20 +473,15 @@
         body.transparent-mode .app-container {
             background: transparent !important;
         }
-        body.transparent-mode .header {
-            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
         body.transparent-mode .left-section {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .preview-panel {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .preview-pdf {
             background: var(--bg-primary) !important;
@@ -495,28 +491,38 @@
         }
         body.transparent-mode .paper-card {
             background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
         }
         body.transparent-mode .search-section {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
             border-radius: 12px;
             margin: 8px;
         }
         body.transparent-mode .floating-search-bar {
             background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 12px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 12px));
         }
         body.transparent-mode .results-section {
             background: transparent !important;
         }
         body.transparent-mode .drop-zone {
             background: rgba(var(--card-bg-rgb), 0.7) !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(calc(var(--module-opacity) * 8px));
+            -webkit-backdrop-filter: blur(calc(var(--module-opacity) * 8px));
+        }
+        /* When opacity is 0, no blur needed */
+        body.transparent-mode.no-blur .left-section,
+        body.transparent-mode.no-blur .preview-panel,
+        body.transparent-mode.no-blur .paper-card,
+        body.transparent-mode.no-blur .search-section,
+        body.transparent-mode.no-blur .floating-search-bar,
+        body.transparent-mode.no-blur .drop-zone {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
         }
 
         /* Theme modal styles */
@@ -553,8 +559,11 @@
         .paper-card:hover, .paper-card.active { border-color: var(--accent-color) !important; }
         .paper-journal { color: var(--accent-color) !important; }
 
-        /* Header with theme support */
+        /* Header with theme support - keep gradient in transparent mode */
         .header {
+            background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 80%, black) 100%) !important;
+        }
+        body.transparent-mode .header {
             background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 80%, black) 100%) !important;
         }
         .header .nav-link {
@@ -566,6 +575,22 @@
         }
         .header .nav-link:hover {
             background: rgba(255,255,255,0.25) !important;
+        }
+        .header .logo-text, .header .logo-subtitle { color: white !important; }
+
+        /* Search suggestions must be on top */
+        .suggestions-dropdown {
+            z-index: 9999 !important;
+            position: absolute !important;
+        }
+        .search-box { position: relative; z-index: 1000; }
+
+        /* Dark mode - lighter search section */
+        body.dark-mode .search-section {
+            background: var(--bg-secondary) !important;
+        }
+        body.dark-mode .search-container {
+            background: transparent;
         }
 
         /* Ensure text readability across modes */
@@ -1090,6 +1115,7 @@
             bgType: 'none',
             bgUrl: '',
             bgMimeType: '',
+            bgIsObjectUrl: false,
             bgOverlayEnabled: false,
             overlayType: 'dark',
             overlayOpacity: 30
@@ -1104,7 +1130,13 @@
         }
 
         function saveThemeSettings() {
-            localStorage.setItem('themeSettings', JSON.stringify(themeSettings));
+            // Don't save object URLs (videos) - they can't be restored
+            const settingsToSave = {...themeSettings};
+            if (themeSettings.bgIsObjectUrl) {
+                settingsToSave.bgUrl = '';
+                settingsToSave.bgType = 'none';
+            }
+            localStorage.setItem('themeSettings', JSON.stringify(settingsToSave));
         }
 
         function applyTheme() {
@@ -1118,6 +1150,7 @@
             // Transparency - auto-enable when background is set
             const hasBackground = themeSettings.bgType !== 'none' && themeSettings.bgUrl;
             document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled || hasBackground);
+            document.body.classList.toggle('no-blur', themeSettings.transparency < 10);
             document.documentElement.style.setProperty('--module-opacity', (themeSettings.transparency / 100).toFixed(2));
 
             // Background
@@ -1221,6 +1254,8 @@
         function setTransparency(value) {
             themeSettings.transparency = parseInt(value);
             document.getElementById('transparencyValue').textContent = value;
+            // Toggle no-blur class when opacity is very low
+            document.body.classList.toggle('no-blur', themeSettings.transparency < 10);
             applyTheme();
         }
 
@@ -1233,6 +1268,9 @@
             }
             applyTheme();
         }
+
+        // Store object URL reference to revoke later
+        let currentBgObjectUrl = null;
 
         function handleBgUpload(input) {
             const file = input.files[0];
@@ -1250,9 +1288,18 @@
                 document.querySelector('input[name="bgType"][value="video"]').checked = true;
             }
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                themeSettings.bgUrl = e.target.result;
+            // Revoke previous object URL if exists
+            if (currentBgObjectUrl) {
+                URL.revokeObjectURL(currentBgObjectUrl);
+            }
+
+            // Use object URL for videos (more efficient, won't crash)
+            // Use data URL for images (can be saved to localStorage)
+            if (file.type.startsWith('video/')) {
+                currentBgObjectUrl = URL.createObjectURL(file);
+                themeSettings.bgUrl = currentBgObjectUrl;
+                themeSettings.bgIsObjectUrl = true;
+
                 // Auto-enable transparency when background is set
                 if (!themeSettings.transparencyEnabled) {
                     themeSettings.transparencyEnabled = true;
@@ -1260,17 +1307,39 @@
                     document.getElementById('transparencySliderRow').style.display = 'block';
                 }
                 applyTheme();
-                showToast('背景已设置', 'success');
-            };
-            reader.readAsDataURL(file);
+                showToast('视频背景已设置 (刷新页面后需重新上传)', 'info');
+            } else {
+                // For images, use data URL (smaller, can be saved)
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    themeSettings.bgUrl = e.target.result;
+                    themeSettings.bgIsObjectUrl = false;
+                    // Auto-enable transparency when background is set
+                    if (!themeSettings.transparencyEnabled) {
+                        themeSettings.transparencyEnabled = true;
+                        document.getElementById('enableTransparency').checked = true;
+                        document.getElementById('transparencySliderRow').style.display = 'block';
+                    }
+                    applyTheme();
+                    showToast('背景已设置', 'success');
+                };
+                reader.readAsDataURL(file);
+            }
         }
 
         function clearBackground() {
+            // Revoke object URL if exists
+            if (currentBgObjectUrl) {
+                URL.revokeObjectURL(currentBgObjectUrl);
+                currentBgObjectUrl = null;
+            }
             themeSettings.bgType = 'none';
             themeSettings.bgUrl = '';
+            themeSettings.bgIsObjectUrl = false;
             document.querySelectorAll('input[name="bgType"]').forEach(r => r.checked = r.value === 'none');
             document.getElementById('bgUploadSection').style.display = 'none';
             document.getElementById('bgOverlaySection').style.display = 'none';
+            document.getElementById('bgFileInput').value = '';
             applyTheme();
         }
 
@@ -1292,6 +1361,11 @@
         }
 
         function resetTheme() {
+            // Revoke object URL if exists
+            if (currentBgObjectUrl) {
+                URL.revokeObjectURL(currentBgObjectUrl);
+                currentBgObjectUrl = null;
+            }
             Object.assign(themeSettings, {
                 mode: 'light',
                 accentColor: '#2c5282',
@@ -1300,11 +1374,13 @@
                 bgType: 'none',
                 bgUrl: '',
                 bgMimeType: '',
+                bgIsObjectUrl: false,
                 bgOverlayEnabled: false,
                 overlayType: 'dark',
                 overlayOpacity: 30
             });
             document.getElementById('bgFileInput').value = '';
+            document.body.classList.remove('no-blur');
             applyTheme();
             showToast('已恢复默认主题', 'success');
         }
