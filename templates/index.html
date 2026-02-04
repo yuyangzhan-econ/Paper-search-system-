@@ -1437,12 +1437,6 @@
             const file = input.files[0];
             if (!file) return;
 
-            // Check file size (limit to 100MB)
-            if (file.size > 100 * 1024 * 1024) {
-                showToast('文件过大，请选择小于100MB的文件', 'error');
-                return;
-            }
-
             // Store file type
             themeSettings.bgMimeType = file.type;
 
@@ -1453,51 +1447,51 @@
             } else if (file.type.startsWith('video/')) {
                 themeSettings.bgType = 'video';
                 document.querySelector('input[name="bgType"][value="video"]').checked = true;
+            } else {
+                showToast('不支持的文件格式', 'error');
+                return;
             }
 
             // Revoke previous object URL if exists
             if (currentBgObjectUrl) {
                 URL.revokeObjectURL(currentBgObjectUrl);
+                currentBgObjectUrl = null;
             }
 
-            // Try to get file path (works in pywebview/Electron)
-            if (file.path) {
-                // Save the file path to server for persistence
-                themeSettings.bgFilePath = file.path;
-                fetch('/api/theme/background', {
+            // Show uploading status
+            showToast('正在上传背景文件...', 'info');
+
+            // Always upload file to server for persistence
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/theme/background/upload', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({path: file.path, type: themeSettings.bgType})
-                }).catch(e => console.log('Could not save background path:', e));
+                    body: formData
+                });
+                const data = await response.json();
 
-                // Use server URL for display (persists across sessions)
-                themeSettings.bgUrl = '/api/theme/background-file?' + Date.now();
-            } else {
-                // No file path available - upload to server
-                const formData = new FormData();
-                formData.append('background', file);
+                if (data.success) {
+                    // Use server URL for display (persists across sessions)
+                    themeSettings.bgFilePath = data.path;
+                    themeSettings.bgUrl = '/api/theme/background-file?' + Date.now();
 
-                try {
-                    // For browsers without file.path, use object URL (won't persist)
-                    currentBgObjectUrl = URL.createObjectURL(file);
-                    themeSettings.bgUrl = currentBgObjectUrl;
-                    showToast('背景已设置 (关闭后需重新设置)', 'info');
-                } catch (e) {
-                    showToast('无法设置背景', 'error');
-                    return;
+                    // Auto-enable transparency when background is set
+                    if (!themeSettings.transparencyEnabled) {
+                        themeSettings.transparencyEnabled = true;
+                        document.getElementById('enableTransparency').checked = true;
+                        document.getElementById('transparencySliderRow').style.display = 'block';
+                    }
+                    applyTheme();
+                    saveThemeSettings();
+                    showToast('背景已设置并保存', 'success');
+                } else {
+                    showToast(data.error || '上传失败', 'error');
                 }
-            }
-
-            // Auto-enable transparency when background is set
-            if (!themeSettings.transparencyEnabled) {
-                themeSettings.transparencyEnabled = true;
-                document.getElementById('enableTransparency').checked = true;
-                document.getElementById('transparencySliderRow').style.display = 'block';
-            }
-            applyTheme();
-            saveThemeSettings();
-            if (file.path) {
-                showToast('背景已设置并保存', 'success');
+            } catch (e) {
+                console.log('Upload error:', e);
+                showToast('上传失败，请重试', 'error');
             }
         }
 
@@ -1507,6 +1501,14 @@
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
+
+            // Clear from server
+            try {
+                await fetch('/api/theme/background/clear', {method: 'POST'});
+            } catch (e) {
+                console.log('Could not clear background from server:', e);
+            }
+
             themeSettings.bgType = 'none';
             themeSettings.bgUrl = '';
             themeSettings.bgFilePath = '';
@@ -1516,6 +1518,7 @@
             document.getElementById('bgFileInput').value = '';
             applyTheme();
             saveThemeSettings();
+            showToast('背景已清除', 'success');
         }
 
         function toggleBgOverlay(enabled) {
@@ -1538,12 +1541,20 @@
             saveThemeSettings();
         }
 
-        function resetTheme() {
+        async function resetTheme() {
             // Revoke object URL if exists
             if (currentBgObjectUrl) {
                 URL.revokeObjectURL(currentBgObjectUrl);
                 currentBgObjectUrl = null;
             }
+
+            // Clear background from server
+            try {
+                await fetch('/api/theme/background/clear', {method: 'POST'});
+            } catch (e) {
+                console.log('Could not clear background from server:', e);
+            }
+
             Object.assign(themeSettings, {
                 mode: 'light',
                 accentColor: '#2c5282',

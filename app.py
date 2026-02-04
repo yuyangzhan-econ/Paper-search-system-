@@ -667,6 +667,10 @@ def api_version():
 # ============== Theme Settings Storage ==============
 
 THEME_SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme_settings.json')
+THEME_BG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'theme_backgrounds')
+
+# Ensure background directory exists
+os.makedirs(THEME_BG_DIR, exist_ok=True)
 
 @app.route('/api/theme', methods=['GET'])
 def api_get_theme():
@@ -727,6 +731,72 @@ def api_save_theme_background():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/theme/background/upload', methods=['POST'])
+def api_upload_theme_background():
+    """
+    Upload background image/video file to server.
+    Stores in theme_backgrounds/ folder for persistence.
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file provided'}), 400
+
+        file = request.files['file']
+        if not file.filename:
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+
+        # Get file extension
+        ext = os.path.splitext(file.filename)[1].lower()
+        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov'}
+
+        if ext not in allowed_extensions:
+            return jsonify({'success': False, 'error': 'Unsupported file type'}), 400
+
+        # Determine type
+        if ext in {'.mp4', '.webm', '.mov'}:
+            bg_type = 'video'
+        else:
+            bg_type = 'image'
+
+        # Delete old background file if exists
+        for old_file in os.listdir(THEME_BG_DIR):
+            old_path = os.path.join(THEME_BG_DIR, old_file)
+            if os.path.isfile(old_path):
+                try:
+                    os.remove(old_path)
+                except:
+                    pass
+
+        # Save with simple name
+        save_filename = f'background{ext}'
+        save_path = os.path.join(THEME_BG_DIR, save_filename)
+        file.save(save_path)
+
+        # Update theme settings
+        settings = {}
+        if os.path.exists(THEME_SETTINGS_FILE):
+            with open(THEME_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+        settings['bgFilePath'] = save_path
+        settings['bgType'] = bg_type
+        settings['bgStoredOnServer'] = True
+
+        with open(THEME_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+
+        return jsonify({
+            'success': True,
+            'message': 'Background uploaded',
+            'type': bg_type,
+            'path': save_path
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/theme/background-file')
 def api_get_background_file():
     """Serve the saved background file."""
@@ -756,6 +826,36 @@ def api_get_background_file():
         mime_type = mime_types.get(ext, 'application/octet-stream')
 
         return send_file(bg_path, mimetype=mime_type)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/theme/background/clear', methods=['POST'])
+def api_clear_theme_background():
+    """Clear/delete the stored background file."""
+    try:
+        # Delete background files
+        for old_file in os.listdir(THEME_BG_DIR):
+            old_path = os.path.join(THEME_BG_DIR, old_file)
+            if os.path.isfile(old_path):
+                try:
+                    os.remove(old_path)
+                except:
+                    pass
+
+        # Update theme settings
+        if os.path.exists(THEME_SETTINGS_FILE):
+            with open(THEME_SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+
+            settings['bgFilePath'] = ''
+            settings['bgType'] = 'none'
+            settings['bgStoredOnServer'] = False
+
+            with open(THEME_SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, ensure_ascii=False, indent=2)
+
+        return jsonify({'success': True, 'message': 'Background cleared'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
