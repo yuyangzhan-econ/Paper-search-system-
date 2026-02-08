@@ -375,11 +375,17 @@
                     <h3 class="theme-section-title">搜索栏设置</h3>
                     <label class="theme-checkbox">
                         <input type="checkbox" id="searchUseDefault" checked onchange="setSearchUseDefault(this.checked)">
-                        <span>使用默认颜色</span>
+                        <span>使用默认颜色（自动适配深浅模式）</span>
                     </label>
                     <div id="searchCustomColorRow" style="display: none; margin-top: 8px;">
-                        <label style="font-size: 0.85rem;">自定义颜色:</label>
-                        <input type="color" id="searchCustomColor" value="#f7fafc" onchange="setSearchColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer; margin-left: 8px;">
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                            <label style="font-size: 0.85rem;">浅色模式:
+                                <input type="color" id="searchCustomColor" value="#f7fafc" onchange="setSearchColor(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                            <label style="font-size: 0.85rem;">深色模式:
+                                <input type="color" id="searchCustomColorDark" value="#2d3748" onchange="setSearchColorDark(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                        </div>
                     </div>
                     <div class="theme-slider-row" style="margin-top: 8px;">
                         <label>搜索栏透明度: <span id="searchOpacityValue">85</span>%</label>
@@ -396,11 +402,17 @@
                     <h3 class="theme-section-title">论文卡片设置</h3>
                     <label class="theme-checkbox">
                         <input type="checkbox" id="cardUseDefault" checked onchange="setCardUseDefault(this.checked)">
-                        <span>使用默认颜色</span>
+                        <span>使用默认颜色（自动适配深浅模式）</span>
                     </label>
                     <div id="cardCustomColorRow" style="display: none; margin-top: 8px;">
-                        <label style="font-size: 0.85rem;">自定义颜色:</label>
-                        <input type="color" id="cardCustomColor" value="#ffffff" onchange="setCardColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer; margin-left: 8px;">
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                            <label style="font-size: 0.85rem;">浅色模式:
+                                <input type="color" id="cardCustomColor" value="#ffffff" onchange="setCardColor(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                            <label style="font-size: 0.85rem;">深色模式:
+                                <input type="color" id="cardCustomColorDark" value="#2d3748" onchange="setCardColorDark(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                        </div>
                     </div>
                     <div class="theme-slider-row" style="margin-top: 8px;">
                         <label>卡片透明度: <span id="cardOpacityValue">90</span>%</label>
@@ -444,25 +456,20 @@
                         <button class="btn btn-secondary btn-sm" onclick="clearBackground()" style="margin-left: 8px;">清除背景</button>
                     </div>
                     <div id="bgOverlaySection" style="display: none; margin-top: 12px;">
-                        <label class="theme-checkbox">
-                            <input type="checkbox" id="enableBgOverlay" onchange="toggleBgOverlay(this.checked)">
-                            <span>添加遮罩层</span>
-                        </label>
-                        <div id="bgOverlayOptions" style="display: none; margin-top: 8px;">
-                            <div style="display: flex; gap: 12px; align-items: center;">
-                                <label class="theme-radio">
-                                    <input type="radio" name="overlayType" value="dark" checked onchange="setOverlayType('dark')">
-                                    <span>深色遮罩</span>
-                                </label>
-                                <label class="theme-radio">
-                                    <input type="radio" name="overlayType" value="light" onchange="setOverlayType('light')">
-                                    <span>浅色遮罩</span>
-                                </label>
-                            </div>
-                            <div class="theme-slider-row" style="margin-top: 8px;">
-                                <label>遮罩透明度: <span id="overlayOpacityValue">30</span>%</label>
-                                <input type="range" id="overlayOpacitySlider" min="10" max="70" value="30" oninput="setOverlayOpacity(this.value)">
-                            </div>
+                        <h4 style="font-size: 0.85rem; margin-bottom: 8px; color: var(--text-secondary);">背景遮罩设置</h4>
+                        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 8px;">
+                            <label class="theme-radio">
+                                <input type="radio" name="overlayType" value="dark" checked onchange="setOverlayType('dark')">
+                                <span>深色遮罩</span>
+                            </label>
+                            <label class="theme-radio">
+                                <input type="radio" name="overlayType" value="light" onchange="setOverlayType('light')">
+                                <span>浅色遮罩</span>
+                            </label>
+                        </div>
+                        <div class="theme-slider-row">
+                            <label>遮罩强度: <span id="overlayOpacityValue">30</span>% <small style="color: var(--text-muted);">(0=背景完全显示, 100=背景完全遮住)</small></label>
+                            <input type="range" id="overlayOpacitySlider" min="0" max="100" value="30" oninput="setOverlayOpacity(this.value)">
                         </div>
                     </div>
                 </div>
@@ -1390,18 +1397,14 @@
             document.documentElement.style.setProperty('--header-opacity', (themeSettings.headerOpacity / 100).toFixed(2));
             document.body.classList.toggle('header-blur-enabled', themeSettings.headerBlurEnabled);
 
-            // Search section customization
-            const searchColor = themeSettings.searchUseDefault
-                ? (isDark ? themeSettings.searchColorDark : themeSettings.searchColor)
-                : themeSettings.searchColor;
+            // Search section customization - always use appropriate color for current mode
+            const searchColor = isDark ? themeSettings.searchColorDark : themeSettings.searchColor;
             document.documentElement.style.setProperty('--search-bg-rgb', hexToRgb(searchColor));
             document.documentElement.style.setProperty('--search-opacity', (themeSettings.searchOpacity / 100).toFixed(2));
             document.body.classList.toggle('search-blur-enabled', themeSettings.searchBlurEnabled);
 
-            // Paper card customization
-            const cardColor = themeSettings.cardUseDefault
-                ? (isDark ? themeSettings.cardColorDark : themeSettings.cardColor)
-                : themeSettings.cardColor;
+            // Paper card customization - always use appropriate color for current mode
+            const cardColor = isDark ? themeSettings.cardColorDark : themeSettings.cardColor;
             document.documentElement.style.setProperty('--card-bg-rgb', hexToRgb(cardColor));
             document.documentElement.style.setProperty('--card-opacity', (themeSettings.cardOpacity / 100).toFixed(2));
             document.body.classList.toggle('card-blur-enabled', themeSettings.cardBlurEnabled);
@@ -1437,8 +1440,8 @@
                 if (video) video.play().catch(() => {});
             }
 
-            // Background overlay
-            if (themeSettings.bgOverlayEnabled && themeSettings.bgType !== 'none') {
+            // Background overlay - always show when background is set
+            if (themeSettings.bgType !== 'none' && themeSettings.bgUrl) {
                 const overlayColor = themeSettings.overlayType === 'dark' ? '0,0,0' : '255,255,255';
                 bgOverlay.style.background = `rgba(${overlayColor}, ${themeSettings.overlayOpacity / 100})`;
             } else {
@@ -1473,6 +1476,7 @@
             document.getElementById('searchUseDefault').checked = themeSettings.searchUseDefault;
             document.getElementById('searchCustomColorRow').style.display = themeSettings.searchUseDefault ? 'none' : 'block';
             document.getElementById('searchCustomColor').value = themeSettings.searchColor;
+            document.getElementById('searchCustomColorDark').value = themeSettings.searchColorDark;
             document.getElementById('searchOpacitySlider').value = themeSettings.searchOpacity;
             document.getElementById('searchOpacityValue').textContent = themeSettings.searchOpacity;
             document.getElementById('searchBlurEnabled').checked = themeSettings.searchBlurEnabled;
@@ -1481,6 +1485,7 @@
             document.getElementById('cardUseDefault').checked = themeSettings.cardUseDefault;
             document.getElementById('cardCustomColorRow').style.display = themeSettings.cardUseDefault ? 'none' : 'block';
             document.getElementById('cardCustomColor').value = themeSettings.cardColor;
+            document.getElementById('cardCustomColorDark').value = themeSettings.cardColorDark;
             document.getElementById('cardOpacitySlider').value = themeSettings.cardOpacity;
             document.getElementById('cardOpacityValue').textContent = themeSettings.cardOpacity;
             document.getElementById('cardBlurEnabled').checked = themeSettings.cardBlurEnabled;
@@ -1495,9 +1500,7 @@
             document.getElementById('bgUploadSection').style.display = themeSettings.bgType !== 'none' ? 'block' : 'none';
             document.getElementById('bgOverlaySection').style.display = themeSettings.bgType !== 'none' ? 'block' : 'none';
 
-            // Overlay
-            document.getElementById('enableBgOverlay').checked = themeSettings.bgOverlayEnabled;
-            document.getElementById('bgOverlayOptions').style.display = themeSettings.bgOverlayEnabled ? 'block' : 'none';
+            // Overlay - always update controls
             document.querySelectorAll('input[name="overlayType"]').forEach(radio => {
                 radio.checked = radio.value === themeSettings.overlayType;
             });
@@ -1573,6 +1576,12 @@
             saveThemeSettings();
         }
 
+        function setSearchColorDark(color) {
+            themeSettings.searchColorDark = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
         function setSearchOpacity(value) {
             themeSettings.searchOpacity = parseInt(value);
             document.getElementById('searchOpacityValue').textContent = value;
@@ -1596,6 +1605,12 @@
 
         function setCardColor(color) {
             themeSettings.cardColor = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setCardColorDark(color) {
+            themeSettings.cardColorDark = color;
             applyTheme();
             saveThemeSettings();
         }
@@ -1712,12 +1727,6 @@
             showToast('背景已清除', 'success');
         }
 
-        function toggleBgOverlay(enabled) {
-            themeSettings.bgOverlayEnabled = enabled;
-            document.getElementById('bgOverlayOptions').style.display = enabled ? 'block' : 'none';
-            applyTheme();
-            saveThemeSettings();
-        }
 
         function setOverlayType(type) {
             themeSettings.overlayType = type;
