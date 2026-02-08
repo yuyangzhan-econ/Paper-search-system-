@@ -83,21 +83,23 @@ def set_windows_icon(icon_path):
                           LR_LOADFROMFILE | LR_DEFAULTSIZE)
 
         if hicon:
-            # Find the window by title
-            def enum_windows_callback(hwnd, results):
+            # Find the window by title using closure
+            found_windows = []
+
+            def enum_windows_callback(hwnd, lParam):
+                # Use closure to access found_windows list
                 if user32.IsWindowVisible(hwnd):
                     length = user32.GetWindowTextLengthW(hwnd) + 1
                     buf = ctypes.create_unicode_buffer(length)
                     user32.GetWindowTextW(hwnd, buf, length)
                     if 'Paper Search' in buf.value:
-                        results.append(hwnd)
+                        found_windows.append(hwnd)
                 return True
 
             WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-            results = []
             user32.EnumWindows(WNDENUMPROC(enum_windows_callback), 0)
 
-            for hwnd in results:
+            for hwnd in found_windows:
                 user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon)
                 user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon)
 
