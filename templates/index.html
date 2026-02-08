@@ -336,24 +336,62 @@
                         <label>顶栏透明度: <span id="headerOpacityValue">100</span>%</label>
                         <input type="range" id="headerOpacitySlider" min="0" max="100" value="100" oninput="setHeaderOpacity(this.value)">
                     </div>
+                    <label class="theme-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="headerBlurEnabled" checked onchange="setHeaderBlur(this.checked)">
+                        <span>顶栏毛玻璃效果</span>
+                    </label>
+                </div>
+
+                <!-- Search Section Customization -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">搜索栏设置</h3>
+                    <label class="theme-checkbox">
+                        <input type="checkbox" id="searchUseDefault" checked onchange="setSearchUseDefault(this.checked)">
+                        <span>使用默认颜色</span>
+                    </label>
+                    <div id="searchCustomColorRow" style="display: none; margin-top: 8px;">
+                        <label style="font-size: 0.85rem;">自定义颜色:</label>
+                        <input type="color" id="searchCustomColor" value="#f7fafc" onchange="setSearchColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer; margin-left: 8px;">
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>搜索栏透明度: <span id="searchOpacityValue">85</span>%</label>
+                        <input type="range" id="searchOpacitySlider" min="0" max="100" value="85" oninput="setSearchOpacity(this.value)">
+                    </div>
+                    <label class="theme-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="searchBlurEnabled" checked onchange="setSearchBlur(this.checked)">
+                        <span>搜索栏毛玻璃效果</span>
+                    </label>
+                </div>
+
+                <!-- Paper Card Customization -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">论文卡片设置</h3>
+                    <label class="theme-checkbox">
+                        <input type="checkbox" id="cardUseDefault" checked onchange="setCardUseDefault(this.checked)">
+                        <span>使用默认颜色</span>
+                    </label>
+                    <div id="cardCustomColorRow" style="display: none; margin-top: 8px;">
+                        <label style="font-size: 0.85rem;">自定义颜色:</label>
+                        <input type="color" id="cardCustomColor" value="#ffffff" onchange="setCardColor(this.value)" style="width: 40px; height: 28px; border: none; cursor: pointer; margin-left: 8px;">
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>卡片透明度: <span id="cardOpacityValue">90</span>%</label>
+                        <input type="range" id="cardOpacitySlider" min="0" max="100" value="90" oninput="setCardOpacity(this.value)">
+                    </div>
+                    <label class="theme-checkbox" style="margin-top: 8px;">
+                        <input type="checkbox" id="cardBlurEnabled" onchange="setCardBlur(this.checked)">
+                        <span>卡片毛玻璃效果</span>
+                    </label>
                 </div>
 
                 <!-- Transparency -->
                 <div class="theme-section">
-                    <h3 class="theme-section-title">模块透明度</h3>
+                    <h3 class="theme-section-title">整体透明模式</h3>
                     <label class="theme-checkbox">
                         <input type="checkbox" id="enableTransparency" onchange="toggleTransparency(this.checked)">
                         <span>启用模块半透明效果</span>
                     </label>
-                    <div class="theme-slider-row" id="transparencySliderRow" style="display: none;">
-                        <label>不透明度: <span id="transparencyValue">80</span>%</label>
-                        <input type="range" id="transparencySlider" min="0" max="100" value="80" oninput="setTransparency(this.value)">
-                        <small style="color: var(--text-muted); font-size: 0.75rem;">0%=完全透明, 100%=不透明</small>
-                    </div>
-                    <label class="theme-checkbox" style="margin-top: 10px;">
-                        <input type="checkbox" id="enableBlur" checked onchange="toggleBlur(this.checked)">
-                        <span>启用毛玻璃效果</span>
-                    </label>
+                    <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">开启后可使用上方各模块的透明度设置</small>
                 </div>
 
                 <!-- Background -->
@@ -487,12 +525,16 @@
             --header-bg-rgb: 255, 255, 255;
             --section-bg-rgb: 247, 250, 252;
             --card-bg-rgb: 255, 255, 255;
+            --search-bg-rgb: 247, 250, 252;
+            --search-opacity: 0.85;
+            --card-opacity: 0.9;
         }
         /* Dark mode RGB values */
         body.dark-mode {
             --header-bg-rgb: 45, 55, 72;
             --section-bg-rgb: 26, 32, 44;
             --card-bg-rgb: 45, 55, 72;
+            --search-bg-rgb: 45, 55, 72;
         }
 
         /* Transparent mode - make everything see-through */
@@ -514,16 +556,18 @@
         body.transparent-mode .preview-pdf iframe {
             background: white !important;
         }
+        /* Paper cards with separate customization */
         body.transparent-mode .paper-card {
-            background: rgba(var(--card-bg-rgb), var(--module-opacity)) !important;
+            background: rgba(var(--card-bg-rgb), var(--card-opacity)) !important;
         }
+        /* Search section with separate customization */
         body.transparent-mode .search-section {
-            background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            background: rgba(var(--search-bg-rgb), var(--search-opacity)) !important;
             border-radius: 12px;
             margin: 8px;
         }
         body.transparent-mode .floating-search-bar {
-            background: rgba(var(--header-bg-rgb), var(--module-opacity)) !important;
+            background: rgba(var(--search-bg-rgb), var(--search-opacity)) !important;
         }
         body.transparent-mode .results-section {
             background: transparent !important;
@@ -531,15 +575,27 @@
         body.transparent-mode .drop-zone {
             background: rgba(var(--card-bg-rgb), 0.7) !important;
         }
-        /* Blur effect - controlled separately */
+        /* Blur effects - controlled per component */
         body.blur-enabled.transparent-mode .left-section,
-        body.blur-enabled.transparent-mode .preview-panel,
+        body.blur-enabled.transparent-mode .preview-panel {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
         body.blur-enabled.transparent-mode .floating-search-bar {
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
         }
-        body.blur-enabled.transparent-mode .paper-card,
-        body.blur-enabled.transparent-mode .search-section,
+        /* Search section blur - separate control */
+        body.search-blur-enabled.transparent-mode .search-section,
+        body.search-blur-enabled.transparent-mode .floating-search-bar {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        /* Card blur - separate control */
+        body.card-blur-enabled.transparent-mode .paper-card {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
         body.blur-enabled.transparent-mode .drop-zone {
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
@@ -582,14 +638,27 @@
         .header .nav-link {
             color: white !important;
             background: rgba(255,255,255,0.1) !important;
+            border: none !important;
+            outline: none !important;
             border-radius: 6px;
             padding: 6px 12px;
             font-weight: 500;
+            box-shadow: none !important;
         }
         .header .nav-link:hover {
             background: rgba(255,255,255,0.25) !important;
         }
+        .header .nav-link:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
         .header .logo-text, .header .logo-subtitle { color: white !important; }
+
+        /* Header blur effect */
+        body.header-blur-enabled.transparent-mode .header {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
 
         /* Search suggestions must be on top of EVERYTHING */
         .suggestions-dropdown {
@@ -1194,15 +1263,31 @@
         const themeSettings = {
             mode: 'light',
             accentColor: '#2c5282',
+            // Header settings
             headerUseAccent: true,
             headerColor: '#2c5282',
             headerOpacity: 100,
+            headerBlurEnabled: true,
+            // Search section settings
+            searchUseDefault: true,
+            searchColor: '#f7fafc',
+            searchColorDark: '#2d3748',
+            searchOpacity: 85,
+            searchBlurEnabled: true,
+            // Paper card settings
+            cardUseDefault: true,
+            cardColor: '#ffffff',
+            cardColorDark: '#2d3748',
+            cardOpacity: 90,
+            cardBlurEnabled: false,
+            // Overall transparency
             transparencyEnabled: false,
             transparency: 80,
             blurEnabled: true,
+            // Background
             bgType: 'none',
             bgUrl: '',
-            bgFilePath: '',  // Server-side file path for background
+            bgFilePath: '',
             bgMimeType: '',
             bgOverlayEnabled: false,
             overlayType: 'dark',
@@ -1256,23 +1341,42 @@
         }
 
         function applyTheme() {
+            const isDark = themeSettings.mode === 'dark';
             // Mode
-            document.body.classList.toggle('dark-mode', themeSettings.mode === 'dark');
+            document.body.classList.toggle('dark-mode', isDark);
 
             // Accent color
             document.documentElement.style.setProperty('--accent-color', themeSettings.accentColor);
             document.documentElement.style.setProperty('--primary', themeSettings.accentColor);
 
-            // Header customization - use RGB for transparent backgrounds
-            const headerColor = themeSettings.headerUseAccent ? themeSettings.accentColor : themeSettings.headerColor;
-            document.documentElement.style.setProperty('--header-color', headerColor);
             // Convert hex to RGB for rgba() usage
             const hexToRgb = (hex) => {
                 const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
                 return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '44, 82, 130';
             };
+
+            // Header customization
+            const headerColor = themeSettings.headerUseAccent ? themeSettings.accentColor : themeSettings.headerColor;
+            document.documentElement.style.setProperty('--header-color', headerColor);
             document.documentElement.style.setProperty('--header-color-rgb', hexToRgb(headerColor));
             document.documentElement.style.setProperty('--header-opacity', (themeSettings.headerOpacity / 100).toFixed(2));
+            document.body.classList.toggle('header-blur-enabled', themeSettings.headerBlurEnabled);
+
+            // Search section customization
+            const searchColor = themeSettings.searchUseDefault
+                ? (isDark ? themeSettings.searchColorDark : themeSettings.searchColor)
+                : themeSettings.searchColor;
+            document.documentElement.style.setProperty('--search-bg-rgb', hexToRgb(searchColor));
+            document.documentElement.style.setProperty('--search-opacity', (themeSettings.searchOpacity / 100).toFixed(2));
+            document.body.classList.toggle('search-blur-enabled', themeSettings.searchBlurEnabled);
+
+            // Paper card customization
+            const cardColor = themeSettings.cardUseDefault
+                ? (isDark ? themeSettings.cardColorDark : themeSettings.cardColor)
+                : themeSettings.cardColor;
+            document.documentElement.style.setProperty('--card-bg-rgb', hexToRgb(cardColor));
+            document.documentElement.style.setProperty('--card-opacity', (themeSettings.cardOpacity / 100).toFixed(2));
+            document.body.classList.toggle('card-blur-enabled', themeSettings.cardBlurEnabled);
 
             // Transparency - auto-enable when background is set
             const hasBackground = themeSettings.bgType !== 'none' && themeSettings.bgUrl;
@@ -1335,13 +1439,26 @@
             document.getElementById('headerCustomColor').value = themeSettings.headerColor;
             document.getElementById('headerOpacitySlider').value = themeSettings.headerOpacity;
             document.getElementById('headerOpacityValue').textContent = themeSettings.headerOpacity;
+            document.getElementById('headerBlurEnabled').checked = themeSettings.headerBlurEnabled;
+
+            // Search section
+            document.getElementById('searchUseDefault').checked = themeSettings.searchUseDefault;
+            document.getElementById('searchCustomColorRow').style.display = themeSettings.searchUseDefault ? 'none' : 'block';
+            document.getElementById('searchCustomColor').value = themeSettings.searchColor;
+            document.getElementById('searchOpacitySlider').value = themeSettings.searchOpacity;
+            document.getElementById('searchOpacityValue').textContent = themeSettings.searchOpacity;
+            document.getElementById('searchBlurEnabled').checked = themeSettings.searchBlurEnabled;
+
+            // Paper cards
+            document.getElementById('cardUseDefault').checked = themeSettings.cardUseDefault;
+            document.getElementById('cardCustomColorRow').style.display = themeSettings.cardUseDefault ? 'none' : 'block';
+            document.getElementById('cardCustomColor').value = themeSettings.cardColor;
+            document.getElementById('cardOpacitySlider').value = themeSettings.cardOpacity;
+            document.getElementById('cardOpacityValue').textContent = themeSettings.cardOpacity;
+            document.getElementById('cardBlurEnabled').checked = themeSettings.cardBlurEnabled;
 
             // Transparency
             document.getElementById('enableTransparency').checked = themeSettings.transparencyEnabled;
-            document.getElementById('transparencySliderRow').style.display = themeSettings.transparencyEnabled ? 'block' : 'none';
-            document.getElementById('transparencySlider').value = themeSettings.transparency;
-            document.getElementById('transparencyValue').textContent = themeSettings.transparency;
-            document.getElementById('enableBlur').checked = themeSettings.blurEnabled;
 
             // Background
             document.querySelectorAll('input[name="bgType"]').forEach(radio => {
@@ -1384,20 +1501,6 @@
 
         function toggleTransparency(enabled) {
             themeSettings.transparencyEnabled = enabled;
-            document.getElementById('transparencySliderRow').style.display = enabled ? 'block' : 'none';
-            applyTheme();
-            saveThemeSettings();
-        }
-
-        function setTransparency(value) {
-            themeSettings.transparency = parseInt(value);
-            document.getElementById('transparencyValue').textContent = value;
-            applyTheme();
-            saveThemeSettings();
-        }
-
-        function toggleBlur(enabled) {
-            themeSettings.blurEnabled = enabled;
             applyTheme();
             saveThemeSettings();
         }
@@ -1418,6 +1521,66 @@
         function setHeaderOpacity(value) {
             themeSettings.headerOpacity = parseInt(value);
             document.getElementById('headerOpacityValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setHeaderBlur(enabled) {
+            themeSettings.headerBlurEnabled = enabled;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        // Search section functions
+        function setSearchUseDefault(useDefault) {
+            themeSettings.searchUseDefault = useDefault;
+            document.getElementById('searchCustomColorRow').style.display = useDefault ? 'none' : 'block';
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setSearchColor(color) {
+            themeSettings.searchColor = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setSearchOpacity(value) {
+            themeSettings.searchOpacity = parseInt(value);
+            document.getElementById('searchOpacityValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setSearchBlur(enabled) {
+            themeSettings.searchBlurEnabled = enabled;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        // Paper card functions
+        function setCardUseDefault(useDefault) {
+            themeSettings.cardUseDefault = useDefault;
+            document.getElementById('cardCustomColorRow').style.display = useDefault ? 'none' : 'block';
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setCardColor(color) {
+            themeSettings.cardColor = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setCardOpacity(value) {
+            themeSettings.cardOpacity = parseInt(value);
+            document.getElementById('cardOpacityValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setCardBlur(enabled) {
+            themeSettings.cardBlurEnabled = enabled;
             applyTheme();
             saveThemeSettings();
         }
@@ -1561,6 +1724,17 @@
                 headerUseAccent: true,
                 headerColor: '#2c5282',
                 headerOpacity: 100,
+                headerBlurEnabled: true,
+                searchUseDefault: true,
+                searchColor: '#f7fafc',
+                searchColorDark: '#2d3748',
+                searchOpacity: 85,
+                searchBlurEnabled: true,
+                cardUseDefault: true,
+                cardColor: '#ffffff',
+                cardColorDark: '#2d3748',
+                cardOpacity: 90,
+                cardBlurEnabled: false,
                 transparencyEnabled: false,
                 transparency: 80,
                 blurEnabled: true,
