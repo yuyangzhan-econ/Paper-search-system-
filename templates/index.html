@@ -364,10 +364,10 @@
                         <label>顶栏透明度: <span id="headerOpacityValue">100</span>%</label>
                         <input type="range" id="headerOpacitySlider" min="0" max="100" value="100" oninput="setHeaderOpacity(this.value)">
                     </div>
-                    <label class="theme-checkbox" style="margin-top: 8px;">
-                        <input type="checkbox" id="headerBlurEnabled" checked onchange="setHeaderBlur(this.checked)">
-                        <span>顶栏毛玻璃效果</span>
-                    </label>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>顶栏毛玻璃: <span id="headerBlurValue">12</span>px</label>
+                        <input type="range" id="headerBlurSlider" min="0" max="30" value="12" oninput="setHeaderBlur(this.value)">
+                    </div>
                 </div>
 
                 <!-- Search Section Customization -->
@@ -391,10 +391,10 @@
                         <label>搜索栏透明度: <span id="searchOpacityValue">85</span>%</label>
                         <input type="range" id="searchOpacitySlider" min="0" max="100" value="85" oninput="setSearchOpacity(this.value)">
                     </div>
-                    <label class="theme-checkbox" style="margin-top: 8px;">
-                        <input type="checkbox" id="searchBlurEnabled" checked onchange="setSearchBlur(this.checked)">
-                        <span>搜索栏毛玻璃效果</span>
-                    </label>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>搜索栏毛玻璃: <span id="searchBlurValue">0</span>px</label>
+                        <input type="range" id="searchBlurSlider" min="0" max="30" value="0" oninput="setSearchBlur(this.value)">
+                    </div>
                 </div>
 
                 <!-- Paper Card Customization -->
@@ -418,20 +418,55 @@
                         <label>卡片透明度: <span id="cardOpacityValue">90</span>%</label>
                         <input type="range" id="cardOpacitySlider" min="0" max="100" value="90" oninput="setCardOpacity(this.value)">
                     </div>
-                    <label class="theme-checkbox" style="margin-top: 8px;">
-                        <input type="checkbox" id="cardBlurEnabled" onchange="setCardBlur(this.checked)">
-                        <span>卡片毛玻璃效果</span>
-                    </label>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>卡片毛玻璃: <span id="cardBlurValue">0</span>px</label>
+                        <input type="range" id="cardBlurSlider" min="0" max="30" value="0" oninput="setCardBlur(this.value)">
+                    </div>
                 </div>
 
-                <!-- Transparency -->
+                <!-- Drop Zone Customization -->
+                <div class="theme-section">
+                    <h3 class="theme-section-title">快速添加栏设置</h3>
+                    <label class="theme-checkbox">
+                        <input type="checkbox" id="dropzoneUseDefault" checked onchange="setDropzoneUseDefault(this.checked)">
+                        <span>使用默认颜色（自动适配深浅模式）</span>
+                    </label>
+                    <div id="dropzoneCustomColorRow" style="display: none; margin-top: 8px;">
+                        <div style="display: flex; gap: 16px; align-items: center;">
+                            <label style="font-size: 0.85rem;">浅色模式:
+                                <input type="color" id="dropzoneCustomColor" value="#ffffff" onchange="setDropzoneColor(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                            <label style="font-size: 0.85rem;">深色模式:
+                                <input type="color" id="dropzoneCustomColorDark" value="#2d3748" onchange="setDropzoneColorDark(this.value)" style="width: 36px; height: 24px; border: none; cursor: pointer; margin-left: 4px; vertical-align: middle;">
+                            </label>
+                        </div>
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>添加栏透明度: <span id="dropzoneOpacityValue">80</span>%</label>
+                        <input type="range" id="dropzoneOpacitySlider" min="0" max="100" value="80" oninput="setDropzoneOpacity(this.value)">
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>添加栏毛玻璃: <span id="dropzoneBlurValue">0</span>px</label>
+                        <input type="range" id="dropzoneBlurSlider" min="0" max="30" value="0" oninput="setDropzoneBlur(this.value)">
+                    </div>
+                </div>
+
+                <!-- Overall Transparency Settings -->
                 <div class="theme-section">
                     <h3 class="theme-section-title">整体透明模式</h3>
                     <label class="theme-checkbox">
                         <input type="checkbox" id="enableTransparency" onchange="toggleTransparency(this.checked)">
                         <span>启用模块半透明效果</span>
                     </label>
-                    <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">开启后可使用上方各模块的透明度设置</small>
+                    <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">开启后可使用上方各模块的透明度和毛玻璃设置</small>
+                    <div class="theme-slider-row" style="margin-top: 12px;">
+                        <label>主面板透明度: <span id="sectionOpacityValue">80</span>%</label>
+                        <input type="range" id="sectionOpacitySlider" min="0" max="100" value="80" oninput="setSectionOpacity(this.value)">
+                    </div>
+                    <div class="theme-slider-row" style="margin-top: 8px;">
+                        <label>主面板毛玻璃: <span id="sectionBlurValue">0</span>px</label>
+                        <input type="range" id="sectionBlurSlider" min="0" max="30" value="0" oninput="setSectionBlur(this.value)">
+                    </div>
                 </div>
 
                 <!-- Background -->
@@ -561,8 +596,14 @@
             --section-bg-rgb: 247, 250, 252;
             --card-bg-rgb: 255, 255, 255;
             --search-bg-rgb: 247, 250, 252;
+            --dropzone-bg-rgb: 255, 255, 255;
             --search-opacity: 0.85;
             --card-opacity: 0.9;
+            --dropzone-opacity: 0.8;
+            --section-blur: 0px;
+            --search-blur: 0px;
+            --card-blur: 0px;
+            --dropzone-blur: 0px;
         }
         /* Dark mode RGB values */
         body.dark-mode {
@@ -570,20 +611,27 @@
             --section-bg-rgb: 26, 32, 44;
             --card-bg-rgb: 45, 55, 72;
             --search-bg-rgb: 45, 55, 72;
+            --dropzone-bg-rgb: 45, 55, 72;
         }
 
         /* Transparent mode - make everything see-through */
+        /* These rules must override dark-mode rules */
         body.transparent-mode {
             background: transparent !important;
         }
         body.transparent-mode .app-container {
             background: transparent !important;
         }
+        /* Main sections with controllable transparency and blur */
         body.transparent-mode .left-section {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(var(--section-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--section-blur)) !important;
         }
         body.transparent-mode .preview-panel {
             background: rgba(var(--section-bg-rgb), var(--module-opacity)) !important;
+            backdrop-filter: blur(var(--section-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--section-blur)) !important;
         }
         body.transparent-mode .preview-pdf {
             background: var(--bg-primary) !important;
@@ -591,49 +639,37 @@
         body.transparent-mode .preview-pdf iframe {
             background: white !important;
         }
-        /* Paper cards with separate customization */
-        body.transparent-mode .paper-card {
+        /* Paper cards with separate customization - MUST override dark mode */
+        body.transparent-mode .paper-card,
+        body.dark-mode.transparent-mode .paper-card {
             background: rgba(var(--card-bg-rgb), var(--card-opacity)) !important;
+            backdrop-filter: blur(var(--card-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--card-blur)) !important;
         }
-        /* Search section with separate customization */
-        body.transparent-mode .search-section {
+        /* Search section with separate customization - MUST override dark mode */
+        body.transparent-mode .search-section,
+        body.dark-mode.transparent-mode .search-section {
             background: rgba(var(--search-bg-rgb), var(--search-opacity)) !important;
+            backdrop-filter: blur(var(--search-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--search-blur)) !important;
             border-radius: 12px;
             margin: 8px;
         }
-        body.transparent-mode .floating-search-bar {
+        body.transparent-mode .floating-search-bar,
+        body.dark-mode.transparent-mode .floating-search-bar {
             background: rgba(var(--search-bg-rgb), var(--search-opacity)) !important;
+            backdrop-filter: blur(var(--search-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--search-blur)) !important;
         }
         body.transparent-mode .results-section {
             background: transparent !important;
         }
-        body.transparent-mode .drop-zone {
-            background: rgba(var(--card-bg-rgb), 0.7) !important;
-        }
-        /* Blur effects - controlled per component */
-        body.blur-enabled.transparent-mode .left-section,
-        body.blur-enabled.transparent-mode .preview-panel {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        body.blur-enabled.transparent-mode .floating-search-bar {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-        }
-        /* Search section blur - separate control */
-        body.search-blur-enabled.transparent-mode .search-section,
-        body.search-blur-enabled.transparent-mode .floating-search-bar {
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-        /* Card blur - separate control */
-        body.card-blur-enabled.transparent-mode .paper-card {
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
-        body.blur-enabled.transparent-mode .drop-zone {
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+        /* Drop zone with separate customization - MUST override dark mode */
+        body.transparent-mode .drop-zone,
+        body.dark-mode.transparent-mode .drop-zone {
+            background: rgba(var(--dropzone-bg-rgb), var(--dropzone-opacity)) !important;
+            backdrop-filter: blur(var(--dropzone-blur)) !important;
+            -webkit-backdrop-filter: blur(var(--dropzone-blur)) !important;
         }
 
         /* Theme modal styles */
@@ -690,9 +726,9 @@
         .header .logo-text, .header .logo-subtitle { color: white !important; }
 
         /* Header blur effect */
-        body.header-blur-enabled.transparent-mode .header {
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+        body.transparent-mode .header {
+            backdrop-filter: blur(var(--header-blur, 12px));
+            -webkit-backdrop-filter: blur(var(--header-blur, 12px));
         }
 
         /* Search suggestions must be on top of EVERYTHING */
@@ -1302,31 +1338,36 @@
             headerUseAccent: true,
             headerColor: '#2c5282',
             headerOpacity: 100,
-            headerBlurEnabled: true,
+            headerBlur: 12,
             // Search section settings
             searchUseDefault: true,
             searchColor: '#f7fafc',
             searchColorDark: '#2d3748',
             searchOpacity: 85,
-            searchBlurEnabled: true,
+            searchBlur: 0,
             // Paper card settings
             cardUseDefault: true,
             cardColor: '#ffffff',
             cardColorDark: '#2d3748',
             cardOpacity: 90,
-            cardBlurEnabled: false,
+            cardBlur: 0,
+            // Drop zone settings
+            dropzoneUseDefault: true,
+            dropzoneColor: '#ffffff',
+            dropzoneColorDark: '#2d3748',
+            dropzoneOpacity: 80,
+            dropzoneBlur: 0,
             // Overall transparency
             transparencyEnabled: false,
             transparency: 80,
-            blurEnabled: true,
+            sectionBlur: 0,
             // Background
             bgType: 'none',
             bgUrl: '',
             bgFilePath: '',
             bgMimeType: '',
-            bgOverlayEnabled: false,
             overlayType: 'dark',
-            overlayOpacity: 30
+            overlayOpacity: 0
         };
 
         // Store object URL reference to revoke later
@@ -1395,25 +1436,31 @@
             document.documentElement.style.setProperty('--header-color', headerColor);
             document.documentElement.style.setProperty('--header-color-rgb', hexToRgb(headerColor));
             document.documentElement.style.setProperty('--header-opacity', (themeSettings.headerOpacity / 100).toFixed(2));
-            document.body.classList.toggle('header-blur-enabled', themeSettings.headerBlurEnabled);
+            document.documentElement.style.setProperty('--header-blur', themeSettings.headerBlur + 'px');
 
             // Search section customization - always use appropriate color for current mode
             const searchColor = isDark ? themeSettings.searchColorDark : themeSettings.searchColor;
             document.documentElement.style.setProperty('--search-bg-rgb', hexToRgb(searchColor));
             document.documentElement.style.setProperty('--search-opacity', (themeSettings.searchOpacity / 100).toFixed(2));
-            document.body.classList.toggle('search-blur-enabled', themeSettings.searchBlurEnabled);
+            document.documentElement.style.setProperty('--search-blur', themeSettings.searchBlur + 'px');
 
             // Paper card customization - always use appropriate color for current mode
             const cardColor = isDark ? themeSettings.cardColorDark : themeSettings.cardColor;
             document.documentElement.style.setProperty('--card-bg-rgb', hexToRgb(cardColor));
             document.documentElement.style.setProperty('--card-opacity', (themeSettings.cardOpacity / 100).toFixed(2));
-            document.body.classList.toggle('card-blur-enabled', themeSettings.cardBlurEnabled);
+            document.documentElement.style.setProperty('--card-blur', themeSettings.cardBlur + 'px');
+
+            // Drop zone customization - always use appropriate color for current mode
+            const dropzoneColor = isDark ? themeSettings.dropzoneColorDark : themeSettings.dropzoneColor;
+            document.documentElement.style.setProperty('--dropzone-bg-rgb', hexToRgb(dropzoneColor));
+            document.documentElement.style.setProperty('--dropzone-opacity', (themeSettings.dropzoneOpacity / 100).toFixed(2));
+            document.documentElement.style.setProperty('--dropzone-blur', themeSettings.dropzoneBlur + 'px');
 
             // Transparency - auto-enable when background is set
             const hasBackground = themeSettings.bgType !== 'none' && themeSettings.bgUrl;
             document.body.classList.toggle('transparent-mode', themeSettings.transparencyEnabled || hasBackground);
-            document.body.classList.toggle('blur-enabled', themeSettings.blurEnabled);
             document.documentElement.style.setProperty('--module-opacity', (themeSettings.transparency / 100).toFixed(2));
+            document.documentElement.style.setProperty('--section-blur', themeSettings.sectionBlur + 'px');
 
             // Background
             const bgContainer = document.getElementById('bgContainer');
@@ -1470,7 +1517,8 @@
             document.getElementById('headerCustomColor').value = themeSettings.headerColor;
             document.getElementById('headerOpacitySlider').value = themeSettings.headerOpacity;
             document.getElementById('headerOpacityValue').textContent = themeSettings.headerOpacity;
-            document.getElementById('headerBlurEnabled').checked = themeSettings.headerBlurEnabled;
+            document.getElementById('headerBlurSlider').value = themeSettings.headerBlur;
+            document.getElementById('headerBlurValue').textContent = themeSettings.headerBlur;
 
             // Search section
             document.getElementById('searchUseDefault').checked = themeSettings.searchUseDefault;
@@ -1479,7 +1527,8 @@
             document.getElementById('searchCustomColorDark').value = themeSettings.searchColorDark;
             document.getElementById('searchOpacitySlider').value = themeSettings.searchOpacity;
             document.getElementById('searchOpacityValue').textContent = themeSettings.searchOpacity;
-            document.getElementById('searchBlurEnabled').checked = themeSettings.searchBlurEnabled;
+            document.getElementById('searchBlurSlider').value = themeSettings.searchBlur;
+            document.getElementById('searchBlurValue').textContent = themeSettings.searchBlur;
 
             // Paper cards
             document.getElementById('cardUseDefault').checked = themeSettings.cardUseDefault;
@@ -1488,10 +1537,25 @@
             document.getElementById('cardCustomColorDark').value = themeSettings.cardColorDark;
             document.getElementById('cardOpacitySlider').value = themeSettings.cardOpacity;
             document.getElementById('cardOpacityValue').textContent = themeSettings.cardOpacity;
-            document.getElementById('cardBlurEnabled').checked = themeSettings.cardBlurEnabled;
+            document.getElementById('cardBlurSlider').value = themeSettings.cardBlur;
+            document.getElementById('cardBlurValue').textContent = themeSettings.cardBlur;
 
-            // Transparency
+            // Drop zone
+            document.getElementById('dropzoneUseDefault').checked = themeSettings.dropzoneUseDefault;
+            document.getElementById('dropzoneCustomColorRow').style.display = themeSettings.dropzoneUseDefault ? 'none' : 'block';
+            document.getElementById('dropzoneCustomColor').value = themeSettings.dropzoneColor;
+            document.getElementById('dropzoneCustomColorDark').value = themeSettings.dropzoneColorDark;
+            document.getElementById('dropzoneOpacitySlider').value = themeSettings.dropzoneOpacity;
+            document.getElementById('dropzoneOpacityValue').textContent = themeSettings.dropzoneOpacity;
+            document.getElementById('dropzoneBlurSlider').value = themeSettings.dropzoneBlur;
+            document.getElementById('dropzoneBlurValue').textContent = themeSettings.dropzoneBlur;
+
+            // Transparency and section settings
             document.getElementById('enableTransparency').checked = themeSettings.transparencyEnabled;
+            document.getElementById('sectionOpacitySlider').value = themeSettings.transparency;
+            document.getElementById('sectionOpacityValue').textContent = themeSettings.transparency;
+            document.getElementById('sectionBlurSlider').value = themeSettings.sectionBlur;
+            document.getElementById('sectionBlurValue').textContent = themeSettings.sectionBlur;
 
             // Background
             document.querySelectorAll('input[name="bgType"]').forEach(radio => {
@@ -1556,8 +1620,9 @@
             saveThemeSettings();
         }
 
-        function setHeaderBlur(enabled) {
-            themeSettings.headerBlurEnabled = enabled;
+        function setHeaderBlur(value) {
+            themeSettings.headerBlur = parseInt(value);
+            document.getElementById('headerBlurValue').textContent = value;
             applyTheme();
             saveThemeSettings();
         }
@@ -1589,8 +1654,9 @@
             saveThemeSettings();
         }
 
-        function setSearchBlur(enabled) {
-            themeSettings.searchBlurEnabled = enabled;
+        function setSearchBlur(value) {
+            themeSettings.searchBlur = parseInt(value);
+            document.getElementById('searchBlurValue').textContent = value;
             applyTheme();
             saveThemeSettings();
         }
@@ -1622,8 +1688,58 @@
             saveThemeSettings();
         }
 
-        function setCardBlur(enabled) {
-            themeSettings.cardBlurEnabled = enabled;
+        function setCardBlur(value) {
+            themeSettings.cardBlur = parseInt(value);
+            document.getElementById('cardBlurValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        // Drop zone functions
+        function setDropzoneUseDefault(useDefault) {
+            themeSettings.dropzoneUseDefault = useDefault;
+            document.getElementById('dropzoneCustomColorRow').style.display = useDefault ? 'none' : 'block';
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setDropzoneColor(color) {
+            themeSettings.dropzoneColor = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setDropzoneColorDark(color) {
+            themeSettings.dropzoneColorDark = color;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setDropzoneOpacity(value) {
+            themeSettings.dropzoneOpacity = parseInt(value);
+            document.getElementById('dropzoneOpacityValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setDropzoneBlur(value) {
+            themeSettings.dropzoneBlur = parseInt(value);
+            document.getElementById('dropzoneBlurValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        // Section (main panels) functions
+        function setSectionOpacity(value) {
+            themeSettings.transparency = parseInt(value);
+            document.getElementById('sectionOpacityValue').textContent = value;
+            applyTheme();
+            saveThemeSettings();
+        }
+
+        function setSectionBlur(value) {
+            themeSettings.sectionBlur = parseInt(value);
+            document.getElementById('sectionBlurValue').textContent = value;
             applyTheme();
             saveThemeSettings();
         }
@@ -1761,27 +1877,31 @@
                 headerUseAccent: true,
                 headerColor: '#2c5282',
                 headerOpacity: 100,
-                headerBlurEnabled: true,
+                headerBlur: 12,
                 searchUseDefault: true,
                 searchColor: '#f7fafc',
                 searchColorDark: '#2d3748',
                 searchOpacity: 85,
-                searchBlurEnabled: true,
+                searchBlur: 0,
                 cardUseDefault: true,
                 cardColor: '#ffffff',
                 cardColorDark: '#2d3748',
                 cardOpacity: 90,
-                cardBlurEnabled: false,
+                cardBlur: 0,
+                dropzoneUseDefault: true,
+                dropzoneColor: '#ffffff',
+                dropzoneColorDark: '#2d3748',
+                dropzoneOpacity: 80,
+                dropzoneBlur: 0,
                 transparencyEnabled: false,
                 transparency: 80,
-                blurEnabled: true,
+                sectionBlur: 0,
                 bgType: 'none',
                 bgUrl: '',
                 bgFilePath: '',
                 bgMimeType: '',
-                bgOverlayEnabled: false,
                 overlayType: 'dark',
-                overlayOpacity: 30
+                overlayOpacity: 0
             });
             document.getElementById('bgFileInput').value = '';
             applyTheme();
